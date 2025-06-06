@@ -24,7 +24,7 @@ void test_tcp_bind() {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");  
     addr.sin_port = htons(8080);        // 端口 8080
-    
+
     printf("Binding to address: %s:%d\n", 
            inet_ntoa(addr.sin_addr), 
            ntohs(addr.sin_port));
@@ -39,11 +39,11 @@ void test_tcp_bind() {
     // 获取绑定后的地址信息
     struct sockaddr_in bound_addr;
     socklen_t addr_len = sizeof(bound_addr);
-    if (getsockname(sockfd, (struct sockaddr*)&bound_addr, &addr_len) == 0) {
-        printf("Bound address: %s:%d\n", 
-               inet_ntoa(bound_addr.sin_addr), 
-               ntohs(bound_addr.sin_port));
-    }
+    // if (getsockname(sockfd, (struct sockaddr*)&bound_addr, &addr_len) == 0) {
+    //     printf("Bound address: %s:%d\n", 
+    //            inet_ntoa(bound_addr.sin_addr), 
+    //            ntohs(bound_addr.sin_port));
+    // }
     
     close(sockfd);
     printf("TCP test completed\n\n");
@@ -78,11 +78,11 @@ void test_udp_bind() {
     // 获取绑定后的地址信息
     struct sockaddr_in bound_addr;
     socklen_t addr_len = sizeof(bound_addr);
-    if (getsockname(sockfd, (struct sockaddr*)&bound_addr, &addr_len) == 0) {
-        printf("Bound address: %s:%d\n", 
-               inet_ntoa(bound_addr.sin_addr), 
-               ntohs(bound_addr.sin_port));
-    }
+    // if (getsockname(sockfd, (struct sockaddr*)&bound_addr, &addr_len) == 0) {
+    //     printf("Bound address: %s:%d\n", 
+    //            inet_ntoa(bound_addr.sin_addr), 
+    //            ntohs(bound_addr.sin_port));
+    // }
     
     close(sockfd);
     printf("UDP test completed\n\n");
@@ -168,8 +168,8 @@ int main() {
     printf("Starting bind system call tests...\n\n");
     
     test_tcp_bind();
-    // test_udp_bind();
-    // test_bind_errors();
+    test_udp_bind();
+    test_bind_errors();
     // test_multiple_binds();
     
     printf("All tests completed!\n");
