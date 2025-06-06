@@ -3,9 +3,10 @@ use axhal::{
     arch::TrapFrame,
     trap::{SYSCALL, register_trap_handler},
 };
-use starry_api::*;
+use starry_api::{*, sockaddr::SockAddr};
 use starry_core::task::{time_stat_from_kernel_to_user, time_stat_from_user_to_kernel};
 use syscalls::Sysno;
+use linux_raw_sys::net::{sockaddr, socklen_t};
 
 #[register_trap_handler(SYSCALL)]
 fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
@@ -201,14 +202,34 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::times => sys_times(tf.arg0().into()),
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
 
-
+        //network
         Sysno::socket => sys_socket(tf.arg0() as u32,tf.arg1() as u32,tf.arg2() as u32),
+        Sysno::socketpair => sys_socketpair(
+            tf.arg0() as u32,
+            tf.arg1() as u32,
+            tf.arg2() as u32,
+            unsafe { &mut *(tf.arg3() as *mut [isize; 2]) },
+        ),
+        Sysno::bind => {
+            // 从用户空间读取 sockaddr 结构
+            let sockaddr_result = unsafe {
+                SockAddr::read(
+                    tf.arg1() as *const sockaddr,
+                    tf.arg2() as socklen_t
+                )
+            };
+            info!("SockAddr::read result: {:?}", sockaddr_result.is_ok());
+            // 处理读取结果
+            match sockaddr_result {
+                Ok(sockaddr) => sys_bind(
+                    tf.arg0() as isize,
+                    &sockaddr,
+                    tf.arg2() as u32
+                ),
+                Err(err) => Err(err),
+            }
+        },
         //TODO:
-        // Sysno::bind => sys_bind(
-        //     tf.arg0() as _,
-        //     tf.arg1().into(),
-        //     tf.arg2() as _,
-        // ),
         // Sysno::connect => sys_connect(
         //     tf.arg0() as _,
         //     tf.arg1().into(),
