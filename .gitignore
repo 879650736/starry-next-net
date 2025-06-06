@@ -11,4 +11,3 @@ apps/*/build/
 !/vendor/**/Cargo.lock
 /.axconfig.*
 *.img
-Cargo.lock
