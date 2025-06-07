@@ -229,6 +229,25 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
                 Err(err) => Err(err),
             }
         },
+        Sysno::connect => {
+            // 从用户空间读取 sockaddr 结构
+            let sockaddr_result = unsafe {
+                SockAddr::read(
+                    tf.arg1() as *const sockaddr,
+                    tf.arg2() as socklen_t
+                )
+            };
+            info!("SockAddr::read result: {:?}", sockaddr_result.is_ok());
+            // 处理读取结果
+            match sockaddr_result {
+                Ok(sockaddr) => sys_connect(
+                    tf.arg0() as isize,
+                    &sockaddr,
+                    tf.arg2() as u32
+                ),
+                Err(err) => Err(err),
+            }
+        },
         //TODO:
         // Sysno::connect => sys_connect(
         //     tf.arg0() as _,

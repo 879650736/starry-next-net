@@ -120,4 +120,37 @@ pub fn sys_bind(fd: isize, addr: &crate::sockaddr::SockAddr, addr_len: u32) -> L
     info!("sys_bind successfully bound fd {}", fd);
     Ok(0)
 }
+pub fn sys_connect(fd: isize, addr: &crate::sockaddr::SockAddr, addr_len: u32) -> LinuxResult<isize> {
+    info!("sys_connect called with fd: {}, addr_len: {}", fd, addr_len);
+
+    // 获取文件描述符对应的 socket
+    let socket = crate::file::get_file_like(fd as i32)?;
+    info!("sys_connect found socket for fd {}", fd);
+
+    // 检查是否为 Socket 类型
+    let any_socket = socket.into_any();
+    if any_socket.is::<crate::file::Socket>() {
+        info!("Object is Socket type");
+    } else {
+        error!("Object is NOT Socket type");
+        return Err(LinuxError::ENOTSOCK);
+    }
+
+    // 将 SockAddr 转换为标准的 SocketAddr
+    let socket_addr: core::net::SocketAddr = addr.clone().try_into()?;
+    info!("sys_connect converted to SocketAddr: {}", socket_addr);
+
+    // 调用 socket 的 connect 方法
+    let socket = any_socket
+        .downcast::<crate::file::Socket>()
+        .map_err(|_| {
+            error!("Failed to downcast to Socket for fd {}", fd);
+            LinuxError::ENOTSOCK
+        })?;
+    
+    socket.connect(socket_addr)?;
+
+    info!("sys_connect successfully connected fd {}", fd);
+    Ok(0)
+}
 
