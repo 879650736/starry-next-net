@@ -1,10 +1,9 @@
-//! 安全地处理 socket 地址的工具函数，使用 UserPtr 与用户空间交互。
+//! Wrapper for `sockaddr`. Using trait to convert between `SocketAddr` and `sockaddr` types.
 
 use core::{
     mem::{size_of, MaybeUninit},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
-
 use axerrno::{LinuxError, LinuxResult};
 use linux_raw_sys::net::{
     __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
@@ -12,36 +11,60 @@ use linux_raw_sys::net::{
 };
 use crate::ptr::{UserPtr, UserConstPtr};
 
-/// 为 socket 地址类型提供与用户空间交互的扩展 trait
+/// Trait to extend `SocketAddr` and its variants with methods for reading from and writing to user space.
+/// 
 pub trait SocketAddrExt: Sized {
-    /// 从用户空间读取 socket 地址
+    /// This method attempts to interpret the data pointed to by `addr` with the
+    /// given `addrlen`as a valid socket address of the implementing type.
     fn read_from_user(addr: UserConstPtr<sockaddr>, addrlen: socklen_t) -> LinuxResult<Self>;
 
-    /// 将 socket 地址写入用户空间
+    /// This method serializes the current socket address instance into the 
+    /// `sockaddr` structure pointed to by `addr` in user space.
     fn write_to_user(&self, addr: UserPtr<sockaddr>) -> LinuxResult<socklen_t>;
-
-    /// 获取地址族
+    
+    /// Gets the address family of the socket address.
     fn family(&self) -> u16;
 
-    /// 获取编码后的地址长度
+    /// Gets the encoded length of the socket address.
     fn addr_len(&self) -> socklen_t;
 }
 
+/// Copies a socket address from user space into a temporary kernel storage.
+///
+/// This function reads `addrlen` bytes from the user-space pointer `addr` and
+/// copies them into a `MaybeUninit<sockaddr>` in kernel memory. 
+/// 
+#[inline]
+fn copy_sockaddr_from_user(
+    addr: UserConstPtr<sockaddr>, 
+    addrlen: socklen_t
+) -> LinuxResult<MaybeUninit<sockaddr>> {
+    let mut storage = MaybeUninit::<sockaddr>::uninit();
+    let sock_addr = addr.get_as_ref()?;
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            sock_addr as *const sockaddr as *const u8,
+            storage.as_mut_ptr() as *mut u8,
+            addrlen as usize,
+        )
+    };
+    Ok(storage)
+}
+
 impl SocketAddrExt for SocketAddr {
+    /// Reads a `SocketAddr` from user space.
+    ///
+    /// This implementation first performs basic length validation. Then, it copies
+    /// the raw `sockaddr` data from user space into a temporary kernel buffer.
+    /// Based on the address family (`AF_INET` or `AF_INET6`) extracted from the
+    /// copied data, it delegates the actual parsing to `SocketAddrV4::read_from_user`
+    /// or `SocketAddrV6::read_from_user`.
      fn read_from_user(addr: UserConstPtr<sockaddr>, addrlen: socklen_t) -> LinuxResult<Self> {
         if size_of::<__kernel_sa_family_t>() > addrlen as usize || addrlen as usize > size_of::<sockaddr>() {
             return Err(LinuxError::EINVAL);
         }
 
-        let mut storage = MaybeUninit::<sockaddr>::uninit();
-        let sock_addr= addr.get_as_ref()?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                sock_addr as *const sockaddr as *const u8,
-                storage.as_mut_ptr() as *mut u8,
-                addrlen as usize,
-            )
-        };
+        let storage = copy_sockaddr_from_user(addr, addrlen)?;
         let family = unsafe { storage.assume_init_ref().__storage.__bindgen_anon_1.__bindgen_anon_1.ss_family as u32 };
         
         match family {
@@ -51,6 +74,11 @@ impl SocketAddrExt for SocketAddr {
         }
     }
 
+    /// Writes the `SocketAddr` to user space.
+    ///
+    /// This implementation checks for a null user-space pointer. Then, it delegates
+    /// the actual writing to the specific `SocketAddrV4` or `SocketAddrV6`
+    /// `write_to_user` implementation based on the variant of `self`.
     fn write_to_user(&self, addr: UserPtr<sockaddr>) -> LinuxResult<socklen_t> {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
@@ -62,6 +90,9 @@ impl SocketAddrExt for SocketAddr {
         }
     }
 
+    /// Gets the address family of the `SocketAddr`.
+    ///
+    /// Returns `AF_INET` for IPv4 addresses or `AF_INET6` for IPv6 addresses.
     fn family(&self) -> u16 {
         match self {
             SocketAddr::V4(_) => AF_INET as u16,
@@ -69,6 +100,10 @@ impl SocketAddrExt for SocketAddr {
         }
     }
 
+    /// Gets the encoded length of the `SocketAddr`.
+    ///
+    /// Returns the size in bytes that this `SocketAddr` would occupy when
+    /// encoded as a `sockaddr_in` (for IPv4) or `sockaddr_in6` (for IPv6) structure.
     fn addr_len(&self) -> socklen_t {
         match self {
             SocketAddr::V4(_) => size_of::<sockaddr_in>() as socklen_t,
@@ -78,21 +113,14 @@ impl SocketAddrExt for SocketAddr {
 }
 
 impl SocketAddrExt for SocketAddrV4 {
+    // Reads an `SocketAddrV4` from user space.
    fn read_from_user(addr: UserConstPtr<sockaddr>, addrlen: socklen_t) -> LinuxResult<Self> {
         if addrlen < size_of::<sockaddr_in>() as socklen_t {
             return Err(LinuxError::EINVAL);
         }
 
-        let mut storage = MaybeUninit::<sockaddr>::uninit();
-        let sock_addr= addr.get_as_ref()?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                sock_addr as *const sockaddr as *const u8,
-                storage.as_mut_ptr() as *mut u8,
-                addrlen as usize,
-            )
-        };
-        
+        let storage = copy_sockaddr_from_user(addr, addrlen)?;
+
         let addr_in = unsafe { &*(storage.as_ptr() as *const sockaddr_in) };
         if addr_in.sin_family as u32 != AF_INET {
             return Err(LinuxError::EAFNOSUPPORT);
@@ -104,6 +132,7 @@ impl SocketAddrExt for SocketAddrV4 {
         ))
     }
 
+    /// Writes the `SocketAddrV4` to user space.
     fn write_to_user(&self, addr: UserPtr<sockaddr>) -> LinuxResult<socklen_t> {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
@@ -127,34 +156,29 @@ impl SocketAddrExt for SocketAddrV4 {
             )
         };
         
-        
         Ok(len)
     }
 
+    /// Gets the address family for `SocketAddrV4`.
     fn family(&self) -> u16 {
         AF_INET as u16
     }
 
+    /// Gets the encoded length of `SocketAddrV4`.
     fn addr_len(&self) -> socklen_t {
         size_of::<sockaddr_in>() as socklen_t
     }
 }
 
 impl SocketAddrExt for SocketAddrV6 {
+
+    /// Reads an `SocketAddrV6` from user space.
     fn read_from_user(addr: UserConstPtr<sockaddr>, addrlen: socklen_t) -> LinuxResult<Self> {
         if addrlen < size_of::<sockaddr_in6>() as socklen_t {
             return Err(LinuxError::EINVAL);
         }
 
-        let mut storage = MaybeUninit::<sockaddr>::uninit();
-        let sock_addr= addr.get_as_ref()?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                sock_addr as *const sockaddr as *const u8,
-                storage.as_mut_ptr() as *mut u8,
-                addrlen as usize,
-            )
-        };
+        let storage = copy_sockaddr_from_user(addr, addrlen)?;
         
         let addr_in6 = unsafe { &*(storage.as_ptr() as *const sockaddr_in6) };
         if addr_in6.sin6_family as u32 != AF_INET6 {
@@ -168,7 +192,7 @@ impl SocketAddrExt for SocketAddrV6 {
             addr_in6.sin6_scope_id,
         ))
     }
-
+    /// Writes the `SocketAddrV6` to user space.
     fn write_to_user(&self, addr: UserPtr<sockaddr>) -> LinuxResult<socklen_t> {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
@@ -199,10 +223,12 @@ impl SocketAddrExt for SocketAddrV6 {
         Ok(len)
     }
 
+    /// Gets the address family for `SocketAddrV6`.
     fn family(&self) -> u16 {
         AF_INET6 as u16
     }
-
+    
+    /// Gets the encoded length of `SocketAddrV6`.
     fn addr_len(&self) -> socklen_t {
         size_of::<sockaddr_in6>() as socklen_t
     }
