@@ -200,7 +200,9 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
         Sysno::times => sys_times(tf.arg0().into()),
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
-
+        Sysno::socket => sys_socket(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
+        Sysno::bind => sys_bind(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
+        Sysno::connect => sys_connect(tf.arg0() as _, tf.arg1().into(), tf.arg2() as _),
         _ => {
             warn!("Unimplemented syscall: {}", sysno);
             Err(LinuxError::ENOSYS)
