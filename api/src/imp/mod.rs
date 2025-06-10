@@ -5,6 +5,6 @@ mod signal;
 mod sys;
 mod task;
 mod time;
-mod socket;
+mod net;
 
-pub use self::{fs::*, futex::*, mm::*, signal::*, sys::*, task::*, time::*, socket::*};
+pub use self::{fs::*, futex::*, mm::*, signal::*, sys::*, task::*, time::*, net::*};
