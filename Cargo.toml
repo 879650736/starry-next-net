@@ -22,19 +22,18 @@ axfeat = { git = "https://github.com/oscomp/arceos.git", features = [
     "smp",
 ] }
 
-axconfig = { git = "https://github.com/oscomp/arceos.git" }
-axfs = { git = "https://github.com/oscomp/arceos.git" }
-axhal = { git = "https://github.com/oscomp/arceos.git", features = ["uspace"] }
-axlog = { git = "https://github.com/oscomp/arceos.git" }
-axmm = { git = "https://github.com/oscomp/arceos.git" }
-axnet = { git = "https://github.com/oscomp/arceos.git" }
-axns = { git = "https://github.com/oscomp/arceos.git", features = [
+axconfig = { path = "./.arceos/modules/axconfig" }
+axfs = { path = "./.arceos/modules/axfs" }
+axhal = { path = "./.arceos/modules/axhal", features = ["uspace"] }
+axlog = { path = "./.arceos/modules/axlog" }
+axmm = { path = "./.arceos/modules/axmm" }
+axnet = { path = "./.arceos/modules/axnet" }
+axns = { path = "./.arceos/modules/axns", features = [
     "thread-local",
 ] }
-axruntime = { git = "https://github.com/oscomp/arceos.git" }
-axsync = { git = "https://github.com/oscomp/arceos.git" }
-axtask = { git = "https://github.com/oscomp/arceos.git" }
-
+axruntime = { path = "./.arceos/modules/axruntime" }
+axsync = { path = "./.arceos/modules/axsync" }
+axtask = { path = "./.arceos/modules/axtask" }
 axprocess = { git = "https://github.com/Starry-OS/axprocess.git" }
 axsignal = { git = "https://github.com/Starry-OS/axsignal.git", rev = "b5b6089" }
 

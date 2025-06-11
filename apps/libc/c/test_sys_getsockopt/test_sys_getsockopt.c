@@ -1,73 +1,58 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <errno.h>
+
+void test_socket_option(int sock, int level, int optname, const char* opt_name) {
+    int value;
+    socklen_t optlen = sizeof(value);
+    
+    if (getsockopt(sock, level, optname, &value, &optlen) < 0) {
+        printf("获取 %s 失败: %s\n", opt_name, strerror(errno));
+    } else {
+        printf("%s: %d 字节\n", opt_name, value);
+    }
+}
 
 int main() {
-    // 创建 TCP 和 UDP 套接字
+    printf("=== 套接字选项测试 ===\n");
+    
+    // 创建TCP和UDP套接字
     int tcp_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (tcp_sock < 0) {
-        perror("TCP socket 创建失败");
+        perror("TCP socket创建失败");
         return 1;
     }
     
     int udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (udp_sock < 0) {
-        perror("UDP socket 创建失败");
+        perror("UDP socket创建失败");
         close(tcp_sock);
         return 1;
     }
     
-    printf("TCP socket fd: %d\n", tcp_sock);
-    printf("UDP socket fd: %d\n", udp_sock);
+    printf("\n=== TCP套接字(fd=%d)测试 ===\n", tcp_sock);
+    test_socket_option(tcp_sock, SOL_SOCKET, SO_SNDBUF, "TCP发送缓冲区大小");
+    test_socket_option(tcp_sock, SOL_SOCKET, SO_RCVBUF, "TCP接收缓冲区大小");
+    test_socket_option(tcp_sock, IPPROTO_TCP, TCP_MAXSEG, "TCP最大分段大小");
     
-    // 测试 SO_SNDBUF 选项
-    int send_buf_size;
-    socklen_t optlen = sizeof(send_buf_size);
+    printf("\n=== UDP套接字(fd=%d)测试 ===\n", udp_sock);
+    test_socket_option(udp_sock, SOL_SOCKET, SO_SNDBUF, "UDP发送缓冲区大小");
+    test_socket_option(udp_sock, SOL_SOCKET, SO_RCVBUF, "UDP接收缓冲区大小");
     
-    // 获取 TCP 套接字的发送缓冲区大小
-    if (getsockopt(tcp_sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, &optlen) < 0) {
-        perror("获取 TCP SO_SNDBUF 失败");
-    } else {
-        printf("TCP socket 发送缓冲区大小: %d 字节\n", send_buf_size);
-    }
+    // 测试在UDP套接字上获取TCP特定选项（应该失败）
+    printf("\n=== 错误测试 ===\n");
+    test_socket_option(udp_sock, IPPROTO_TCP, TCP_MAXSEG, "UDP上获取TCP_MAXSEG");
     
-    // 获取 UDP 套接字的发送缓冲区大小
-    if (getsockopt(udp_sock, SOL_SOCKET, SO_SNDBUF, &send_buf_size, &optlen) < 0) {
-        perror("获取 UDP SO_SNDBUF 失败");
-    } else {
-        printf("UDP socket 发送缓冲区大小: %d 字节\n", send_buf_size);
-    }
+    // 测试不支持的选项
+    test_socket_option(tcp_sock, SOL_SOCKET, SO_REUSEADDR, "不支持的SO_REUSEADDR");
     
-    // 测试 SO_RCVBUF 选项
-    int recv_buf_size;
-    optlen = sizeof(recv_buf_size);
-    
-    // 获取 TCP 套接字的接收缓冲区大小
-    if (getsockopt(tcp_sock, SOL_SOCKET, SO_RCVBUF, &recv_buf_size, &optlen) < 0) {
-        perror("获取 TCP SO_RCVBUF 失败");
-    } else {
-        printf("TCP socket 接收缓冲区大小: %d 字节\n", recv_buf_size);
-    }
-    
-    // 获取 UDP 套接字的接收缓冲区大小
-    if (getsockopt(udp_sock, SOL_SOCKET, SO_RCVBUF, &recv_buf_size, &optlen) < 0) {
-        perror("获取 UDP SO_RCVBUF 失败");
-    } else {
-        printf("UDP socket 接收缓冲区大小: %d 字节\n", recv_buf_size);
-    }
-    
-    // 测试不支持的选项（应该返回错误）
-    int unsupported_opt;
-    optlen = sizeof(unsupported_opt);
-    
-    if (getsockopt(tcp_sock, SOL_SOCKET, SO_REUSEADDR, &unsupported_opt, &optlen) < 0) {
-        perror("获取 SO_REUSEADDR 失败（预期会失败）");
-    } else {
-        printf("SO_REUSEADDR 值: %d（意外成功）\n", unsupported_opt);
-    }
+    // 测试无效的文件描述符
+    int invalid_fd = 9999;
+    test_socket_option(invalid_fd, SOL_SOCKET, SO_SNDBUF, "无效文件描述符");
     
     // 关闭套接字
     close(tcp_sock);

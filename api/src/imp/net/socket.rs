@@ -10,10 +10,10 @@ use linux_raw_sys::net::{
 };
 use crate::socket::SocketAddrExt;
 use core::{
-    mem::{size_of, MaybeUninit},
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    fmt::Error, mem::{size_of, MaybeUninit}, net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6}
 };
 use core::ffi::c_void;
+use crate::file::get_file_like;
 
 pub fn sys_socket(domain: u32, socket_type: u32, protocol: u32) -> LinuxResult<isize> {
     info!("sys_socket called with domain: {}, type: {}, protocol: {}", domain, socket_type, protocol);
@@ -95,7 +95,7 @@ pub fn sys_bind(fd: isize, addr: UserConstPtr<sockaddr>, addr_len: u32) -> Linux
     info!("sys_bind called with fd: {}, addr_len: {}", fd, addr_len);
 
     // 获取文件描述符对应的 socket
-    let socket = crate::file::get_file_like(fd as i32)?;
+    let socket = get_file_like(fd as i32)?;
     info!("sys_bind found socket for fd {}", fd);
     // 检查是否为 Socket 类型
      let any_socket = socket.into_any();
@@ -135,7 +135,7 @@ pub fn sys_connect(fd: isize, addr: UserConstPtr<sockaddr>, addr_len: u32) -> Li
     info!("sys_connect called with fd: {}, addr_len: {}", fd, addr_len);
 
     // 获取文件描述符对应的 socket
-    let socket = crate::file::get_file_like(fd as i32)?;
+    let socket = get_file_like(fd as i32)?;
     info!("sys_connect found socket for fd {}", fd);
 
     // 检查是否为 Socket 类型
@@ -178,7 +178,7 @@ pub fn sys_setsockopt(
     );
 
     // 获取文件描述符对应的 socket
-    let socket = crate::file::get_file_like(fd as i32)?;
+    let socket = get_file_like(fd as i32)?;
     info!("sys_setsockopt found socket for fd {}", fd);
 
     // 检查是否为 Socket 类型
@@ -301,7 +301,7 @@ pub fn sys_getsockopt(
     );
 
     // 获取文件描述符对应的 socket
-    let socket = crate::file::get_file_like(fd as i32)?;
+    let socket = get_file_like(fd as i32)?;
     info!("sys_getsockopt found socket for fd {}", fd);
 
     // 检查是否为 Socket 类型
@@ -349,32 +349,52 @@ pub fn sys_getsockopt(
             Ok(0)
         }
         (linux_raw_sys::net::SOL_SOCKET, linux_raw_sys::net::SO_RCVBUF) => {
+                let len = optlen.get_as_mut()?;
+                if *len < core::mem::size_of::<i32>() as socklen_t {
+                    return Err(LinuxError::EINVAL);
+                }
+
+                let buf_size = match socket.as_ref() {
+                    crate::file::Socket::Tcp(tcp_socket) => {
+                        let socket = tcp_socket.lock();
+                        socket.recv_capacity() 
+                    }
+                    crate::file::Socket::Udp(udp_socket) => {
+                        let socket = udp_socket.lock();
+                        socket.recv_capacity() 
+                    }
+                };
+
+                let buffer = optval.get_as_mut()?;
+                *buffer = buf_size as u32;
+                let buffer_len = optlen.get_as_mut()?;
+                *buffer_len = core::mem::size_of::<i32>() as socklen_t;
+                info!("SO_RCVBUF returning buffer size: {} bytes", buf_size);
+                Ok(0)
+        }
+
+        (val, linux_raw_sys::net::TCP_MAXSEG) if val == linux_raw_sys::net::IPPROTO_TCP as u32 => {
             let len = optlen.get_as_mut()?;
             if *len < core::mem::size_of::<i32>() as socklen_t {
                 return Err(LinuxError::EINVAL);
             }
 
-            let buf_size = match socket.as_ref() {
+            let mss_size = match socket.as_ref() {
                 crate::file::Socket::Tcp(tcp_socket) => {
                     let socket = tcp_socket.lock();
-                    socket.recv_capacity() 
+                    socket.get_remote_mss() 
                 }
                 crate::file::Socket::Udp(udp_socket) => {
-                    let socket = udp_socket.lock();
-                    socket.recv_capacity() 
+                    return Err(LinuxError::ENOPROTOOPT);
                 }
             };
 
             let buffer = optval.get_as_mut()?;
-            *buffer = buf_size as u32;
+            *buffer = mss_size as u32;
             let buffer_len = optlen.get_as_mut()?;
             *buffer_len = core::mem::size_of::<i32>() as socklen_t;
-            info!("SO_RCVBUF returning buffer size: {} bytes", buf_size);
+            info!("TCP_MAXSEG returning buffer size: {} bytes", mss_size);
             Ok(0)
-        }
-
-        (val, linux_raw_sys::net::TCP_MAXSEG) if val == linux_raw_sys::net::IPPROTO_TCP as u32 => {
-
             
         }
         // 其他未实现的选项

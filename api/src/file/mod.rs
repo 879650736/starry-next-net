@@ -158,8 +158,9 @@ pub fn close_file_like(fd: c_int) -> LinuxResult {
     Ok(())
 }
 
+
 #[ctor_bare::register_ctor]
-fn init_stdio() {
+fn init_stdio1() {
     let mut fd_table = flatten_objects::FlattenObjects::new();
     fd_table
         .add_at(0, Arc::new(stdio::stdin()) as _)
