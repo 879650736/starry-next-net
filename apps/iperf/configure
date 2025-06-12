@@ -807,7 +807,19 @@ enable_libtool_lock
 enable_maintainer_mode
 enable_profiling
 with_sctp
+enable_openssl
 with_openssl
+enable_have_tcp_congestion
+enable_have_tcp_user_timeout
+enable_have_flowlabel
+enable_cpu_affinity
+enable_daemon
+enable_sendfile
+enable_have_so_max_pacing_rate
+enable_have_so_bindtodevice
+enable_have_ip_mtu_discover
+enable_have_dont_fragment
+enable_have_tcp_snd_wnd
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1461,6 +1473,26 @@ Optional Features:
                           enable make rules and dependencies not useful (and
                           sometimes confusing) to the casual installer
   --enable-profiling      Enable iperf3 profiling binary
+  --disable-openssl       Disable OpenSSL support
+  --disable-have-tcp-congestion
+                          Disable TCP_CONGESTION socket option support
+  --disable-have-tcp-user-timeout
+                          Disable TCP_USER_TIMEOUT socket option support
+  --disable-have-flowlabel
+                          Disable IPv6 flowlabel support
+  --disable-cpu-affinity  Disable CPU affinity support
+  --disable-daemon        Disable daemon support
+  --disable-sendfile      Disable sendfile support
+  --disable-have-so-max-pacing-rate
+                          Disable SO_MAX_PACING_RATE socket option support
+  --disable-have-so-bindtodevice
+                          Disable SO_BINDTODEVICE socket option support
+  --disable-have-ip-mtu-discover
+                          Disable IP_MTU_DISCOVER socket option support
+  --disable-have-dont-fragment
+                          Disable Don't Fragment (DF) packet support
+  --disable-have-tcp-snd-wnd
+                          Disable TCP send window information support
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -6069,7 +6101,7 @@ linux* | k*bsd*-gnu | kopensolaris*-gnu | gnu*)
   lt_cv_deplibs_check_method=pass_all
   ;;
 
-netbsd*)
+netbsd* | netbsdelf*-gnu)
   if echo __ELF__ | $CC -E - | $GREP __ELF__ > /dev/null; then
     lt_cv_deplibs_check_method='match_pattern /lib[^/]+(\.so\.[0-9]+\.[0-9]+|_pic\.a)$'
   else
@@ -6993,11 +7025,8 @@ _LT_EOF
   test $ac_status = 0; }; then
     # Now try to grab the symbols.
     nlist=conftest.nm
-    if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$NM conftest.$ac_objext \| "$lt_cv_sys_global_symbol_pipe" \> $nlist\""; } >&5
-  (eval $NM conftest.$ac_objext \| "$lt_cv_sys_global_symbol_pipe" \> $nlist) 2>&5
-  ac_status=$?
-  printf "%s\n" "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; } && test -s "$nlist"; then
+    $ECHO "$as_me:$LINENO: $NM conftest.$ac_objext | $lt_cv_sys_global_symbol_pipe > $nlist" >&5
+    if eval "$NM" conftest.$ac_objext \| "$lt_cv_sys_global_symbol_pipe" \> $nlist 2>&5 && test -s "$nlist"; then
       # Try sorting and uniquifying the output.
       if sort "$nlist" | uniq > "$nlist"T; then
 	mv -f "$nlist"T "$nlist"
@@ -9178,6 +9207,12 @@ lt_prog_compiler_static=
 	lt_prog_compiler_pic='-KPIC'
 	lt_prog_compiler_static='-static'
         ;;
+      # flang / f18. f95 an alias for gfortran or flang on Debian
+      flang* | f18* | f95*)
+	lt_prog_compiler_wl='-Wl,'
+	lt_prog_compiler_pic='-fPIC'
+	lt_prog_compiler_static='-static'
+        ;;
       # icc used to be incompatible with GCC.
       # ICC 10 doesn't accept -KPIC any more.
       icc* | ifort*)
@@ -9659,6 +9694,9 @@ printf %s "checking whether the $compiler linker ($LD) supports shared libraries
   openbsd* | bitrig*)
     with_gnu_ld=no
     ;;
+  linux* | k*bsd*-gnu | gnu*)
+    link_all_deplibs=no
+    ;;
   esac
 
   ld_shlibs=yes
@@ -9894,6 +9932,7 @@ _LT_EOF
 
 	case $cc_basename in
 	tcc*)
+	  hardcode_libdir_flag_spec='$wl-rpath $wl$libdir'
 	  export_dynamic_flag_spec='-rdynamic'
 	  ;;
 	xlf* | bgf* | bgxlf* | mpixlf*)
@@ -9914,7 +9953,7 @@ _LT_EOF
       fi
       ;;
 
-    netbsd*)
+    netbsd* | netbsdelf*-gnu)
       if echo __ELF__ | $CC -E - | $GREP __ELF__ >/dev/null; then
 	archive_cmds='$LD -Bshareable $libobjs $deplibs $linker_flags -o $lib'
 	wlarc=
@@ -10591,6 +10630,7 @@ printf "%s\n" "$lt_cv_irix_exported_symbol" >&6; }
 	if test yes = "$lt_cv_irix_exported_symbol"; then
           archive_expsym_cmds='$CC -shared $pic_flag $libobjs $deplibs $compiler_flags $wl-soname $wl$soname `test -n "$verstring" && func_echo_all "$wl-set_version $wl$verstring"` $wl-update_registry $wl$output_objdir/so_locations $wl-exports_file $wl$export_symbols -o $lib'
 	fi
+	link_all_deplibs=no
       else
 	archive_cmds='$CC -shared $libobjs $deplibs $compiler_flags -soname $soname `test -n "$verstring" && func_echo_all "-set_version $verstring"` -update_registry $output_objdir/so_locations -o $lib'
 	archive_expsym_cmds='$CC -shared $libobjs $deplibs $compiler_flags -soname $soname `test -n "$verstring" && func_echo_all "-set_version $verstring"` -update_registry $output_objdir/so_locations -exports_file $export_symbols -o $lib'
@@ -10608,11 +10648,12 @@ printf "%s\n" "$lt_cv_irix_exported_symbol" >&6; }
 	# Fabrice Bellard et al's Tiny C Compiler
 	ld_shlibs=yes
 	archive_cmds='$CC -shared $pic_flag -o $lib $libobjs $deplibs $compiler_flags'
+	hardcode_libdir_flag_spec='$wl-rpath $wl$libdir'
 	;;
       esac
       ;;
 
-    netbsd*)
+    netbsd* | netbsdelf*-gnu)
       if echo __ELF__ | $CC -E - | $GREP __ELF__ >/dev/null; then
 	archive_cmds='$LD -Bshareable -o $lib $libobjs $deplibs $linker_flags'  # a.out
       else
@@ -11730,6 +11771,18 @@ fi
   # people can always --disable-shared, the test was removed, and we
   # assume the GNU/Linux dynamic linker is in use.
   dynamic_linker='GNU/Linux ld.so'
+  ;;
+
+netbsdelf*-gnu)
+  version_type=linux
+  need_lib_prefix=no
+  need_version=no
+  library_names_spec='${libname}${release}${shared_ext}$versuffix ${libname}${release}${shared_ext}$major ${libname}${shared_ext}'
+  soname_spec='${libname}${release}${shared_ext}$major'
+  shlibpath_var=LD_LIBRARY_PATH
+  shlibpath_overrides_runpath=no
+  hardcode_into_libs=yes
+  dynamic_linker='NetBSD ld.elf_so'
   ;;
 
 netbsd*)
@@ -13707,108 +13760,6 @@ else
 fi
 
 
-if test -n "$ac_tool_prefix"; then
-  # Extract the first word of "${ac_tool_prefix}ranlib", so it can be a program name with args.
-set dummy ${ac_tool_prefix}ranlib; ac_word=$2
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_prog_RANLIB+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-  if test -n "$RANLIB"; then
-  ac_cv_prog_RANLIB="$RANLIB" # Let the user override the test.
-else
-as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  case $as_dir in #(((
-    '') as_dir=./ ;;
-    */) ;;
-    *) as_dir=$as_dir/ ;;
-  esac
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_prog_RANLIB="${ac_tool_prefix}ranlib"
-    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-fi
-fi
-RANLIB=$ac_cv_prog_RANLIB
-if test -n "$RANLIB"; then
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $RANLIB" >&5
-printf "%s\n" "$RANLIB" >&6; }
-else
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-fi
-
-
-fi
-if test -z "$ac_cv_prog_RANLIB"; then
-  ac_ct_RANLIB=$RANLIB
-  # Extract the first word of "ranlib", so it can be a program name with args.
-set dummy ranlib; ac_word=$2
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_prog_ac_ct_RANLIB+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-  if test -n "$ac_ct_RANLIB"; then
-  ac_cv_prog_ac_ct_RANLIB="$ac_ct_RANLIB" # Let the user override the test.
-else
-as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  case $as_dir in #(((
-    '') as_dir=./ ;;
-    */) ;;
-    *) as_dir=$as_dir/ ;;
-  esac
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_prog_ac_ct_RANLIB="ranlib"
-    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-fi
-fi
-ac_ct_RANLIB=$ac_cv_prog_ac_ct_RANLIB
-if test -n "$ac_ct_RANLIB"; then
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_ct_RANLIB" >&5
-printf "%s\n" "$ac_ct_RANLIB" >&6; }
-else
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-fi
-
-  if test "x$ac_ct_RANLIB" = x; then
-    RANLIB=":"
-  else
-    case $cross_compiling:$ac_tool_warned in
-yes:)
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
-printf "%s\n" "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
-ac_tool_warned=yes ;;
-esac
-    RANLIB=$ac_ct_RANLIB
-  fi
-else
-  RANLIB="$ac_cv_prog_RANLIB"
-fi
-
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether ln -s works" >&5
 printf %s "checking whether ln -s works... " >&6; }
 LN_S=$as_ln_s
@@ -14346,12 +14297,36 @@ fi
 fi
 
 
-if test "x$with_openssl" = "xno"; then
+# Check if OpenSSL should be disabled
+# Check whether --enable-openssl was given.
+if test ${enable_openssl+y}
+then :
+  enableval=$enable_openssl;
+        case "$enableval" in
+        yes|"")
+            disable_openssl=false
+            ;;
+        no)
+            disable_openssl=true
+            with_openssl=no
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-openssl value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_openssl=false
+
+fi
+
+
+if test "x$with_openssl" = "xno" -o "x$disable_openssl" = "xtrue"; then
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Building without OpenSSL; disabling iperf_auth functionality. " >&5
 printf "%s\n" "$as_me: WARNING: Building without OpenSSL; disabling iperf_auth functionality. " >&2;}
 else
     # Check for OPENSSL support
-    havs_ssl=false
+    have_ssl=false
 
     found=false
 
@@ -14616,10 +14591,39 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_tcp_congestion" >&5
 printf "%s\n" "$iperf3_cv_header_tcp_congestion" >&6; }
-if test "x$iperf3_cv_header_tcp_congestion" = "xyes"; then
+
+# Check if TCP_CONGESTION support should be disabled
+# Check whether --enable-have-tcp-congestion was given.
+if test ${enable_have_tcp_congestion+y}
+then :
+  enableval=$enable_have_tcp_congestion;
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_congestion=false
+            ;;
+        no)
+            disable_have_tcp_congestion=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-tcp-congestion value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_tcp_congestion=false
+
+fi
+
+
+if test "x$disable_have_tcp_congestion" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: TCP_CONGESTION socket option support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: TCP_CONGESTION socket option support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_tcp_congestion" = "xyes"; then
 
 printf "%s\n" "#define HAVE_TCP_CONGESTION 1" >>confdefs.h
 
+    fi
 fi
 
 # Check for TCP_USER_TIMEOUT sockopt (believed to be Linux 2.6.37+ only)
@@ -14650,10 +14654,39 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_tcp_user_timeout" >&5
 printf "%s\n" "$iperf3_cv_header_tcp_user_timeout" >&6; }
-if test "x$iperf3_cv_header_tcp_user_timeout" = "xyes"; then
+
+# Check if TCP_USER_TIMEOUT support should be disabled
+# Check whether --enable-have-tcp-user-timeout was given.
+if test ${enable_have_tcp_user_timeout+y}
+then :
+  enableval=$enable_have_tcp_user_timeout;
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_user_timeout=false
+            ;;
+        no)
+            disable_have_tcp_user_timeout=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-tcp-user-timeout value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_tcp_user_timeout=false
+
+fi
+
+
+if test "x$disable_have_tcp_user_timeout" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: TCP_USER_TIMEOUT socket option support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: TCP_USER_TIMEOUT socket option support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_tcp_user_timeout" = "xyes"; then
 
 printf "%s\n" "#define HAVE_TCP_USER_TIMEOUT 1" >>confdefs.h
 
+    fi
 fi
 
 # Check for IPv6 flowlabel support (believed to be Linux only)
@@ -14688,17 +14721,74 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_flowlabel" >&5
 printf "%s\n" "$iperf3_cv_header_flowlabel" >&6; }
-if test "x$iperf3_cv_header_flowlabel" = "xyes"; then
 
-printf "%s\n" "#define HAVE_FLOWLABEL 1" >>confdefs.h
+# Check if IPv6 flowlabel support should be disabled
+# Check whether --enable-have-flowlabel was given.
+if test ${enable_have_flowlabel+y}
+then :
+  enableval=$enable_have_flowlabel;
+        case "$enableval" in
+        yes|"")
+            disable_have_flowlabel=false
+            ;;
+        no)
+            disable_have_flowlabel=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-flowlabel value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_flowlabel=false
 
 fi
 
-# Check for CPU affinity support.  FreeBSD and Linux do this differently
-# unfortunately so we have to check separately for each of them.
-# FreeBSD uses cpuset_setaffinity while Linux uses sched_setaffinity.
-# Define HAVE_CPU_AFFINITY to indicate the CPU affinity setting as a
-# generic concept is available.
+
+if test "x$disable_have_flowlabel" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: IPv6 flowlabel support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: IPv6 flowlabel support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_flowlabel" = "xyes"; then
+
+printf "%s\n" "#define HAVE_FLOWLABEL 1" >>confdefs.h
+
+    fi
+fi
+
+
+# Check if CPU affinity support should be disabled
+# Check whether --enable-cpu-affinity was given.
+if test ${enable_cpu_affinity+y}
+then :
+  enableval=$enable_cpu_affinity;
+        case "$enableval" in
+        yes|"")
+            disable_cpu_affinity=false
+            ;;
+        no)
+            disable_cpu_affinity=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-cpu-affinity value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_cpu_affinity=false
+
+fi
+
+
+if test "x$disable_cpu_affinity" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: CPU affinity support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: CPU affinity support disabled by user" >&2;}
+else
+    # Check for CPU affinity support.  FreeBSD and Linux do this differently
+    # unfortunately so we have to check separately for each of them.
+    # FreeBSD uses cpuset_setaffinity while Linux uses sched_setaffinity.
+    # Define HAVE_CPU_AFFINITY to indicate the CPU affinity setting as a
+    # generic concept is available.
 
   for ac_func in cpuset_setaffinity sched_setaffinity SetProcessAffinityMask
 do :
@@ -14715,36 +14805,83 @@ printf "%s\n" "#define HAVE_CPU_AFFINITY 1" >>confdefs.h
 fi
 
 done
+fi
 
-# Check for daemon().  Most systems have this but a few (IRIX) don't.
-ac_fn_c_check_func "$LINENO" "daemon" "ac_cv_func_daemon"
+# Check if daemon support should be disabled
+# Check whether --enable-daemon was given.
+if test ${enable_daemon+y}
+then :
+  enableval=$enable_daemon;
+        case "$enableval" in
+        yes|"")
+            disable_daemon=false
+            ;;
+        no)
+            disable_daemon=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-daemon value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_daemon=false
+
+fi
+
+
+if test "x$disable_daemon" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Daemon support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: Daemon support disabled by user" >&2;}
+else
+    # Check for daemon().  Most systems have this but a few (IRIX) don't.
+    ac_fn_c_check_func "$LINENO" "daemon" "ac_cv_func_daemon"
 if test "x$ac_cv_func_daemon" = xyes
 then :
   printf "%s\n" "#define HAVE_DAEMON 1" >>confdefs.h
 
 fi
 
+fi
 
-# Check for sendfile support.  FreeBSD, Linux, and MacOS all support
-# this system call, but they're all different in terms of what headers
-# it needs and what arguments it expects.
-ac_fn_c_check_func "$LINENO" "sendfile" "ac_cv_func_sendfile"
+# Check if sendfile support should be disabled
+# Check whether --enable-sendfile was given.
+if test ${enable_sendfile+y}
+then :
+  enableval=$enable_sendfile;
+        case "$enableval" in
+        yes|"")
+            disable_sendfile=false
+            ;;
+        no)
+            disable_sendfile=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-sendfile value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_sendfile=false
+
+fi
+
+
+if test "x$disable_sendfile" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Sendfile support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: Sendfile support disabled by user" >&2;}
+else
+    # Check for sendfile support.  FreeBSD, Linux, and MacOS all support
+    # this system call, but they're all different in terms of what headers
+    # it needs and what arguments it expects.
+    ac_fn_c_check_func "$LINENO" "sendfile" "ac_cv_func_sendfile"
 if test "x$ac_cv_func_sendfile" = xyes
 then :
   printf "%s\n" "#define HAVE_SENDFILE 1" >>confdefs.h
 
 fi
 
-
-# Check for getline support, used as a part of authenticated
-# connections.
-ac_fn_c_check_func "$LINENO" "getline" "ac_cv_func_getline"
-if test "x$ac_cv_func_getline" = xyes
-then :
-  printf "%s\n" "#define HAVE_GETLINE 1" >>confdefs.h
-
 fi
-
 
 # Check for packet pacing socket option (Linux only for now).
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking SO_MAX_PACING_RATE socket option" >&5
@@ -14774,10 +14911,39 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_so_max_pacing_rate" >&5
 printf "%s\n" "$iperf3_cv_header_so_max_pacing_rate" >&6; }
-if test "x$iperf3_cv_header_so_max_pacing_rate" = "xyes"; then
+
+# Check if SO_MAX_PACING_RATE support should be disabled
+# Check whether --enable-have-so-max-pacing-rate was given.
+if test ${enable_have_so_max_pacing_rate+y}
+then :
+  enableval=$enable_have_so_max_pacing_rate;
+        case "$enableval" in
+        yes|"")
+            disable_have_so_max_pacing_rate=false
+            ;;
+        no)
+            disable_have_so_max_pacing_rate=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-so-max-pacing-rate value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_so_max_pacing_rate=false
+
+fi
+
+
+if test "x$disable_have_so_max_pacing_rate" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: SO_MAX_PACING_RATE socket option support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: SO_MAX_PACING_RATE socket option support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_so_max_pacing_rate" = "xyes"; then
 
 printf "%s\n" "#define HAVE_SO_MAX_PACING_RATE 1" >>confdefs.h
 
+    fi
 fi
 
 # Check for SO_BINDTODEVICE sockopt (believed to be Linux only)
@@ -14808,10 +14974,39 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_so_bindtodevice" >&5
 printf "%s\n" "$iperf3_cv_header_so_bindtodevice" >&6; }
-if test "x$iperf3_cv_header_so_bindtodevice" = "xyes"; then
+
+# Check if SO_BINDTODEVICE support should be disabled
+# Check whether --enable-have-so-bindtodevice was given.
+if test ${enable_have_so_bindtodevice+y}
+then :
+  enableval=$enable_have_so_bindtodevice;
+        case "$enableval" in
+        yes|"")
+            disable_have_so_bindtodevice=false
+            ;;
+        no)
+            disable_have_so_bindtodevice=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-so-bindtodevice value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_so_bindtodevice=false
+
+fi
+
+
+if test "x$disable_have_so_bindtodevice" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: SO_BINDTODEVICE socket option support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: SO_BINDTODEVICE socket option support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_so_bindtodevice" = "xyes"; then
 
 printf "%s\n" "#define HAVE_SO_BINDTODEVICE 1" >>confdefs.h
 
+    fi
 fi
 
 # Check for IP_MTU_DISCOVER (mostly on Linux)
@@ -14844,10 +15039,39 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_ip_mtu_discover" >&5
 printf "%s\n" "$iperf3_cv_header_ip_mtu_discover" >&6; }
-if test "x$iperf3_cv_header_ip_mtu_discover" = "xyes"; then
+
+# Check if IP_MTU_DISCOVER support should be disabled
+# Check whether --enable-have-ip-mtu-discover was given.
+if test ${enable_have_ip_mtu_discover+y}
+then :
+  enableval=$enable_have_ip_mtu_discover;
+        case "$enableval" in
+        yes|"")
+            disable_have_ip_mtu_discover=false
+            ;;
+        no)
+            disable_have_ip_mtu_discover=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-ip-mtu-discover value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_ip_mtu_discover=false
+
+fi
+
+
+if test "x$disable_have_ip_mtu_discover" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: IP_MTU_DISCOVER socket option support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: IP_MTU_DISCOVER socket option support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_ip_mtu_discover" = "xyes"; then
 
 printf "%s\n" "#define HAVE_IP_MTU_DISCOVER 1" >>confdefs.h
 
+    fi
 fi
 
 # Check for IP_DONTFRAG (BSD?)
@@ -14938,10 +15162,38 @@ fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $iperf3_cv_header_dontfragment" >&5
 printf "%s\n" "$iperf3_cv_header_dontfragment" >&6; }
 
-if test "x$iperf3_cv_header_dontfragment" = "xyes"; then
+# Check if Don't Fragment support should be disabled
+# Check whether --enable-have-dont-fragment was given.
+if test ${enable_have_dont_fragment+y}
+then :
+  enableval=$enable_have_dont_fragment;
+        case "$enableval" in
+        yes|"")
+            disable_have_dont_fragment=false
+            ;;
+        no)
+            disable_have_dont_fragment=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-dont-fragment value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_dont_fragment=false
+
+fi
+
+
+if test "x$disable_have_dont_fragment" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Don't Fragment (DF) packet support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: Don't Fragment (DF) packet support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_dontfragment" = "xyes"; then
 
 printf "%s\n" "#define HAVE_DONT_FRAGMENT 1" >>confdefs.h
 
+    fi
 fi
 
 #
@@ -14963,10 +15215,38 @@ else $as_nop
 fi
 
 
-if test "x$iperf3_cv_header_tcp_info_snd_wnd" = "xyes"; then
+# Check if TCP send window support should be disabled
+# Check whether --enable-have-tcp-snd-wnd was given.
+if test ${enable_have_tcp_snd_wnd+y}
+then :
+  enableval=$enable_have_tcp_snd_wnd;
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_snd_wnd=false
+            ;;
+        no)
+            disable_have_tcp_snd_wnd=true
+            ;;
+        *)
+            as_fn_error $? "Invalid --enable-have-tcp-snd-wnd value" "$LINENO" 5
+            ;;
+        esac
+
+else $as_nop
+  disable_have_tcp_snd_wnd=false
+
+fi
+
+
+if test "x$disable_have_tcp_snd_wnd" = "xtrue"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: TCP send window information support disabled by user" >&5
+printf "%s\n" "$as_me: WARNING: TCP send window information support disabled by user" >&2;}
+else
+    if test "x$iperf3_cv_header_tcp_info_snd_wnd" = "xyes"; then
 
 printf "%s\n" "#define HAVE_TCP_INFO_SND_WND 1" >>confdefs.h
 
+    fi
 fi
 
 # Check if we need -lrt for clock_gettime
@@ -16776,7 +17056,6 @@ See \`config.log' for more details" "$LINENO" 5; }
     cat <<_LT_EOF >> "$cfgfile"
 #! $SHELL
 # Generated automatically by $as_me ($PACKAGE) $VERSION
-# Libtool was configured on host `(hostname || uname -n) 2>/dev/null | sed 1q`:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 
 # Provide generalized library-building support services.

@@ -130,10 +130,8 @@ pub unsafe fn sys_select1(
     exceptfds: *mut __kernel_fd_set,
     timeout: *mut timeval,
 ) -> LinuxResult<c_int> {
-    debug!(
-        "sys_select <= {} {:#x} {:#x} {:#x}",
-        nfds, readfds as usize, writefds as usize, exceptfds as usize
-    );
+    info!("sys_select1 called with nfds: {}, readfds: {:?}, writefds: {:?}, exceptfds: {:?}, timeout: {:?}",
+        nfds, readfds, writefds, exceptfds, timeout);
     if nfds < 0 {
         return Err(LinuxError::EINVAL);
     }
@@ -193,7 +191,7 @@ pub fn sys_select(
     } else {
         &mut readfds_local
     };
-    debug!("readfds1");
+    debug!("readfds: {:?}", readfds1);
     
     let mut writefds_local = __kernel_fd_set {fds_bits: [0; 16]};
     let writefds1: &mut __kernel_fd_set = if !writefds.is_null() {
@@ -201,7 +199,7 @@ pub fn sys_select(
     } else {
         &mut writefds_local
     };
-    debug!("writefds1");
+    debug!("writefds: {:?}", writefds1);
     
     let mut exceptfds_local = __kernel_fd_set {fds_bits: [0; 16]};
     let exceptfds1: &mut __kernel_fd_set = if !exceptfds.is_null() {
@@ -209,11 +207,15 @@ pub fn sys_select(
     } else {
         &mut exceptfds_local
     };
-    debug!("exceptfds1");
-    
-    let mut timeout1 = timeout.get_as_mut()?;
-    debug!("timeout1");
-    
+    debug!("exceptfds: {:?}", exceptfds1);
+
+    let mut timeout_local = timeval {tv_sec: 0, tv_usec: 0};
+    let timeout1: &mut timeval = if !timeout.is_null() {
+        timeout.get_as_mut()?
+    } else {
+        &mut timeout_local
+    };
+    debug!("timeout: {:?}", timeout1);
     let ret: i32;
     unsafe{
         ret = sys_select1(

@@ -48,7 +48,6 @@ AC_CANONICAL_HOST
 # Checks for tools: c compiler, ranlib (used for creating static libraries),
 # symlinks and libtool
 AC_PROG_CC
-AC_PROG_RANLIB
 AC_PROG_LN_S
 LT_INIT
 
@@ -133,11 +132,31 @@ AC_CHECK_HEADER([endian.h],
 				)
 		)
 
-if test "x$with_openssl" = "xno"; then
+# Check if OpenSSL should be disabled
+AC_ARG_ENABLE([openssl],
+    [AS_HELP_STRING([--disable-openssl], [Disable OpenSSL support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_openssl=false
+            ;;
+        no)
+            disable_openssl=true
+            with_openssl=no
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-openssl value])
+            ;;
+        esac
+    ],
+    [disable_openssl=false]
+)
+
+if test "x$with_openssl" = "xno" -o "x$disable_openssl" = "xtrue"; then
     AC_MSG_WARN( [Building without OpenSSL; disabling iperf_auth functionality.] )
 else
     # Check for OPENSSL support
-    havs_ssl=false
+    have_ssl=false
     AX_CHECK_OPENSSL(
         [ AC_DEFINE([HAVE_SSL], [1], [OpenSSL Is Available])
           have_ssl=true ],
@@ -165,8 +184,32 @@ AC_COMPILE_IFELSE(
                    [[int foo = TCP_CONGESTION;]])],
   iperf3_cv_header_tcp_congestion=yes,
   iperf3_cv_header_tcp_congestion=no))
-if test "x$iperf3_cv_header_tcp_congestion" = "xyes"; then
-    AC_DEFINE([HAVE_TCP_CONGESTION], [1], [Have TCP_CONGESTION sockopt.])
+
+# Check if TCP_CONGESTION support should be disabled
+AC_ARG_ENABLE([have-tcp-congestion],
+    [AS_HELP_STRING([--disable-have-tcp-congestion], [Disable TCP_CONGESTION socket option support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_congestion=false
+            ;;
+        no)
+            disable_have_tcp_congestion=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-tcp-congestion value])
+            ;;
+        esac
+    ],
+    [disable_have_tcp_congestion=false]
+)
+
+if test "x$disable_have_tcp_congestion" = "xtrue"; then
+    AC_MSG_WARN([TCP_CONGESTION socket option support disabled by user])
+else
+    if test "x$iperf3_cv_header_tcp_congestion" = "xyes"; then
+        AC_DEFINE([HAVE_TCP_CONGESTION], [1], [Have TCP_CONGESTION sockopt.])
+    fi
 fi
 
 # Check for TCP_USER_TIMEOUT sockopt (believed to be Linux 2.6.37+ only)
@@ -177,8 +220,32 @@ AC_COMPILE_IFELSE(
                    [[int foo = TCP_USER_TIMEOUT;]])],
   iperf3_cv_header_tcp_user_timeout=yes,
   iperf3_cv_header_tcp_user_timeout=no))
-if test "x$iperf3_cv_header_tcp_user_timeout" = "xyes"; then
-    AC_DEFINE([HAVE_TCP_USER_TIMEOUT], [1], [Have TCP_USER_TIMEOUT sockopt.])
+
+# Check if TCP_USER_TIMEOUT support should be disabled
+AC_ARG_ENABLE([have-tcp-user-timeout],
+    [AS_HELP_STRING([--disable-have-tcp-user-timeout], [Disable TCP_USER_TIMEOUT socket option support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_user_timeout=false
+            ;;
+        no)
+            disable_have_tcp_user_timeout=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-tcp-user-timeout value])
+            ;;
+        esac
+    ],
+    [disable_have_tcp_user_timeout=false]
+)
+
+if test "x$disable_have_tcp_user_timeout" = "xtrue"; then
+    AC_MSG_WARN([TCP_USER_TIMEOUT socket option support disabled by user])
+else
+    if test "x$iperf3_cv_header_tcp_user_timeout" = "xyes"; then
+        AC_DEFINE([HAVE_TCP_USER_TIMEOUT], [1], [Have TCP_USER_TIMEOUT sockopt.])
+    fi
 fi
 
 # Check for IPv6 flowlabel support (believed to be Linux only)
@@ -193,30 +260,120 @@ AC_COMPILE_IFELSE(
                    [[int foo = IPV6_FLOWLABEL_MGR;]])],
   iperf3_cv_header_flowlabel=yes,
   iperf3_cv_header_flowlabel=no))
-if test "x$iperf3_cv_header_flowlabel" = "xyes"; then
-    AC_DEFINE([HAVE_FLOWLABEL], [1], [Have IPv6 flowlabel support.])
+
+# Check if IPv6 flowlabel support should be disabled
+AC_ARG_ENABLE([have-flowlabel],
+    [AS_HELP_STRING([--disable-have-flowlabel], [Disable IPv6 flowlabel support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_flowlabel=false
+            ;;
+        no)
+            disable_have_flowlabel=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-flowlabel value])
+            ;;
+        esac
+    ],
+    [disable_have_flowlabel=false]
+)
+
+if test "x$disable_have_flowlabel" = "xtrue"; then
+    AC_MSG_WARN([IPv6 flowlabel support disabled by user])
+else
+    if test "x$iperf3_cv_header_flowlabel" = "xyes"; then
+        AC_DEFINE([HAVE_FLOWLABEL], [1], [Have IPv6 flowlabel support.])
+    fi
 fi
 
-# Check for CPU affinity support.  FreeBSD and Linux do this differently
-# unfortunately so we have to check separately for each of them.
-# FreeBSD uses cpuset_setaffinity while Linux uses sched_setaffinity.
-# Define HAVE_CPU_AFFINITY to indicate the CPU affinity setting as a
-# generic concept is available.
-AC_CHECK_FUNCS([cpuset_setaffinity sched_setaffinity SetProcessAffinityMask],
-	       AC_DEFINE([HAVE_CPU_AFFINITY], [1], 
-	 	         [Have CPU affinity support.]))
 
-# Check for daemon().  Most systems have this but a few (IRIX) don't.
-AC_CHECK_FUNCS([daemon])
+# Check if CPU affinity support should be disabled
+AC_ARG_ENABLE([cpu-affinity],
+    [AS_HELP_STRING([--disable-cpu-affinity], [Disable CPU affinity support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_cpu_affinity=false
+            ;;
+        no)
+            disable_cpu_affinity=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-cpu-affinity value])
+            ;;
+        esac
+    ],
+    [disable_cpu_affinity=false]
+)
 
-# Check for sendfile support.  FreeBSD, Linux, and MacOS all support
-# this system call, but they're all different in terms of what headers
-# it needs and what arguments it expects.
-AC_CHECK_FUNCS([sendfile])
+if test "x$disable_cpu_affinity" = "xtrue"; then
+    AC_MSG_WARN([CPU affinity support disabled by user])
+else
+    # Check for CPU affinity support.  FreeBSD and Linux do this differently
+    # unfortunately so we have to check separately for each of them.
+    # FreeBSD uses cpuset_setaffinity while Linux uses sched_setaffinity.
+    # Define HAVE_CPU_AFFINITY to indicate the CPU affinity setting as a
+    # generic concept is available.
+    AC_CHECK_FUNCS([cpuset_setaffinity sched_setaffinity SetProcessAffinityMask],
+           AC_DEFINE([HAVE_CPU_AFFINITY], [1], 
+                 [Have CPU affinity support.]))
+fi
 
-# Check for getline support, used as a part of authenticated
-# connections.
-AC_CHECK_FUNCS([getline])
+# Check if daemon support should be disabled
+AC_ARG_ENABLE([daemon],
+    [AS_HELP_STRING([--disable-daemon], [Disable daemon support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_daemon=false
+            ;;
+        no)
+            disable_daemon=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-daemon value])
+            ;;
+        esac
+    ],
+    [disable_daemon=false]
+)
+
+if test "x$disable_daemon" = "xtrue"; then
+    AC_MSG_WARN([Daemon support disabled by user])
+else
+    # Check for daemon().  Most systems have this but a few (IRIX) don't.
+    AC_CHECK_FUNCS([daemon])
+fi
+
+# Check if sendfile support should be disabled
+AC_ARG_ENABLE([sendfile],
+    [AS_HELP_STRING([--disable-sendfile], [Disable sendfile support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_sendfile=false
+            ;;
+        no)
+            disable_sendfile=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-sendfile value])
+            ;;
+        esac
+    ],
+    [disable_sendfile=false]
+)
+
+if test "x$disable_sendfile" = "xtrue"; then
+    AC_MSG_WARN([Sendfile support disabled by user])
+else
+    # Check for sendfile support.  FreeBSD, Linux, and MacOS all support
+    # this system call, but they're all different in terms of what headers
+    # it needs and what arguments it expects.
+    AC_CHECK_FUNCS([sendfile])
+fi
 
 # Check for packet pacing socket option (Linux only for now).
 AC_CACHE_CHECK([SO_MAX_PACING_RATE socket option],
@@ -226,8 +383,32 @@ AC_COMPILE_IFELSE(
                    [[int foo = SO_MAX_PACING_RATE;]])],
   iperf3_cv_header_so_max_pacing_rate=yes,
   iperf3_cv_header_so_max_pacing_rate=no))
-if test "x$iperf3_cv_header_so_max_pacing_rate" = "xyes"; then
-    AC_DEFINE([HAVE_SO_MAX_PACING_RATE], [1], [Have SO_MAX_PACING_RATE sockopt.])
+
+# Check if SO_MAX_PACING_RATE support should be disabled
+AC_ARG_ENABLE([have-so-max-pacing-rate],
+    [AS_HELP_STRING([--disable-have-so-max-pacing-rate], [Disable SO_MAX_PACING_RATE socket option support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_so_max_pacing_rate=false
+            ;;
+        no)
+            disable_have_so_max_pacing_rate=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-so-max-pacing-rate value])
+            ;;
+        esac
+    ],
+    [disable_have_so_max_pacing_rate=false]
+)
+
+if test "x$disable_have_so_max_pacing_rate" = "xtrue"; then
+    AC_MSG_WARN([SO_MAX_PACING_RATE socket option support disabled by user])
+else
+    if test "x$iperf3_cv_header_so_max_pacing_rate" = "xyes"; then
+        AC_DEFINE([HAVE_SO_MAX_PACING_RATE], [1], [Have SO_MAX_PACING_RATE sockopt.])
+    fi
 fi
 
 # Check for SO_BINDTODEVICE sockopt (believed to be Linux only)
@@ -238,8 +419,32 @@ AC_COMPILE_IFELSE(
                    [[int foo = SO_BINDTODEVICE;]])],
   iperf3_cv_header_so_bindtodevice=yes,
   iperf3_cv_header_so_bindtodevice=no))
-if test "x$iperf3_cv_header_so_bindtodevice" = "xyes"; then
-    AC_DEFINE([HAVE_SO_BINDTODEVICE], [1], [Have SO_BINDTODEVICE sockopt.])
+
+# Check if SO_BINDTODEVICE support should be disabled
+AC_ARG_ENABLE([have-so-bindtodevice],
+    [AS_HELP_STRING([--disable-have-so-bindtodevice], [Disable SO_BINDTODEVICE socket option support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_so_bindtodevice=false
+            ;;
+        no)
+            disable_have_so_bindtodevice=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-so-bindtodevice value])
+            ;;
+        esac
+    ],
+    [disable_have_so_bindtodevice=false]
+)
+
+if test "x$disable_have_so_bindtodevice" = "xtrue"; then
+    AC_MSG_WARN([SO_BINDTODEVICE socket option support disabled by user])
+else
+    if test "x$iperf3_cv_header_so_bindtodevice" = "xyes"; then
+        AC_DEFINE([HAVE_SO_BINDTODEVICE], [1], [Have SO_BINDTODEVICE sockopt.])
+    fi
 fi
 
 # Check for IP_MTU_DISCOVER (mostly on Linux)
@@ -252,8 +457,32 @@ AC_COMPILE_IFELSE(
                    [[int foo = IP_MTU_DISCOVER;]])],
   iperf3_cv_header_ip_mtu_discover=yes,
   iperf3_cv_header_ip_mtu_discover=no))
-if test "x$iperf3_cv_header_ip_mtu_discover" = "xyes"; then
-    AC_DEFINE([HAVE_IP_MTU_DISCOVER], [1], [Have IP_MTU_DISCOVER sockopt.])
+
+# Check if IP_MTU_DISCOVER support should be disabled
+AC_ARG_ENABLE([have-ip-mtu-discover],
+    [AS_HELP_STRING([--disable-have-ip-mtu-discover], [Disable IP_MTU_DISCOVER socket option support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_ip_mtu_discover=false
+            ;;
+        no)
+            disable_have_ip_mtu_discover=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-ip-mtu-discover value])
+            ;;
+        esac
+    ],
+    [disable_have_ip_mtu_discover=false]
+)
+
+if test "x$disable_have_ip_mtu_discover" = "xtrue"; then
+    AC_MSG_WARN([IP_MTU_DISCOVER socket option support disabled by user])
+else
+    if test "x$iperf3_cv_header_ip_mtu_discover" = "xyes"; then
+        AC_DEFINE([HAVE_IP_MTU_DISCOVER], [1], [Have IP_MTU_DISCOVER sockopt.])
+    fi
 fi
 
 # Check for IP_DONTFRAG (BSD?)
@@ -293,8 +522,31 @@ else
   iperf3_cv_header_dontfragment=no
 fi])
 
-if test "x$iperf3_cv_header_dontfragment" = "xyes"; then
-    AC_DEFINE([HAVE_DONT_FRAGMENT], [1], [Have IP_MTU_DISCOVER/IP_DONTFRAG/IP_DONTFRAGMENT sockopt.])
+# Check if Don't Fragment support should be disabled
+AC_ARG_ENABLE([have-dont-fragment],
+    [AS_HELP_STRING([--disable-have-dont-fragment], [Disable Don't Fragment (DF) packet support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_dont_fragment=false
+            ;;
+        no)
+            disable_have_dont_fragment=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-dont-fragment value])
+            ;;
+        esac
+    ],
+    [disable_have_dont_fragment=false]
+)
+
+if test "x$disable_have_dont_fragment" = "xtrue"; then
+    AC_MSG_WARN([Don't Fragment (DF) packet support disabled by user])
+else
+    if test "x$iperf3_cv_header_dontfragment" = "xyes"; then
+        AC_DEFINE([HAVE_DONT_FRAGMENT], [1], [Have IP_MTU_DISCOVER/IP_DONTFRAG/IP_DONTFRAGMENT sockopt.])
+    fi
 fi
 
 #
@@ -310,8 +562,31 @@ AC_CHECK_MEMBER([struct tcp_info.tcpi_snd_wnd],
 #endif
 ])
 
-if test "x$iperf3_cv_header_tcp_info_snd_wnd" = "xyes"; then
-  AC_DEFINE([HAVE_TCP_INFO_SND_WND], [1], [Have tcpi_snd_wnd field in tcp_info.])
+# Check if TCP send window support should be disabled
+AC_ARG_ENABLE([have-tcp-snd-wnd],
+    [AS_HELP_STRING([--disable-have-tcp-snd-wnd], [Disable TCP send window information support])],
+    [
+        case "$enableval" in
+        yes|"")
+            disable_have_tcp_snd_wnd=false
+            ;;
+        no)
+            disable_have_tcp_snd_wnd=true
+            ;;
+        *)
+            AC_MSG_ERROR([Invalid --enable-have-tcp-snd-wnd value])
+            ;;
+        esac
+    ],
+    [disable_have_tcp_snd_wnd=false]
+)
+
+if test "x$disable_have_tcp_snd_wnd" = "xtrue"; then
+    AC_MSG_WARN([TCP send window information support disabled by user])
+else
+    if test "x$iperf3_cv_header_tcp_info_snd_wnd" = "xyes"; then
+        AC_DEFINE([HAVE_TCP_INFO_SND_WND], [1], [Have tcpi_snd_wnd field in tcp_info.])
+    fi
 fi
 
 # Check if we need -lrt for clock_gettime

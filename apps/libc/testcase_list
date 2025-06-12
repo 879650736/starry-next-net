@@ -1,2 +1,2 @@
 helloworld_c
-test_sys_select_c
+test_sys_clock_gettime_c
