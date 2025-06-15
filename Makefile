@@ -69,6 +69,7 @@ clean: ax_root
 	@for dir in $(shell ls ./apps); do \
 		make -C ./apps/$$dir clean; \
 	done
+	@rm -rf ./build
 	@cargo clean
 
 doc: defconfig
