@@ -137,7 +137,7 @@ impl SocketAddrExt for SocketAddrV4 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-
+        let mut dst_addr: &'static mut sockaddr = addr.get_as_mut()?;
         let len = size_of::<sockaddr_in>() as socklen_t;
         let sockin_addr = sockaddr_in {
             sin_family: AF_INET as _,
@@ -147,11 +147,10 @@ impl SocketAddrExt for SocketAddrV4 {
             },
             __pad: [0_u8; 8],
         };
-        let mut storage = MaybeUninit::<sockaddr>::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
                 &sockin_addr as *const sockaddr_in as *const u8,
-                storage.as_mut_ptr() as *mut u8,
+                dst_addr as *mut sockaddr as *mut u8,
                 len as usize,
             )
         };
@@ -197,7 +196,7 @@ impl SocketAddrExt for SocketAddrV6 {
         if addr.is_null() {
             return Err(LinuxError::EINVAL);
         }
-
+        let mut dst_addr: &'static mut sockaddr = addr.get_as_mut()?;
         let len = size_of::<sockaddr_in6>() as socklen_t;
         let sockin_addr = sockaddr_in6 {
             sin6_family: AF_INET6 as _,
@@ -211,11 +210,10 @@ impl SocketAddrExt for SocketAddrV6 {
             sin6_scope_id: self.scope_id(),
         };
         
-        let mut storage = MaybeUninit::<sockaddr>::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
                 &sockin_addr as *const sockaddr_in6 as *const u8,
-                storage.as_mut_ptr() as *mut u8,
+                dst_addr as *mut sockaddr as *mut u8,
                 len as usize,
             )
         };
