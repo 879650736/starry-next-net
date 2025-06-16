@@ -1,24 +1,33 @@
+use crate::file::get_file_like;
+use crate::socket::SocketAddrExt;
+use crate::{
+    imp::sys,
+    ptr::{UserConstPtr, UserPtr},
+};
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
+use axhal::time::wall_time;
 use axnet::{TcpSocket, UdpSocket};
-use linux_raw_sys::net::{SOCK_STREAM, SOCK_DGRAM};
 use axtask::{TaskExtRef, current};
-use crate::{imp::sys, ptr::{UserConstPtr, UserPtr}};
-use linux_raw_sys::net::{
-    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
-    sockaddr_in6, socklen_t, 
+use core::ffi::{c_int, c_void};
+use core::time::Duration;
+use core::{
+    fmt::Error,
+    mem::{MaybeUninit, size_of},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 use linux_raw_sys::general::{__kernel_fd_set, timeval};
-use crate::socket::SocketAddrExt;
-use core::{
-    fmt::Error, mem::{size_of, MaybeUninit}, net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6}
+use linux_raw_sys::net::{
+    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
+    sockaddr_in6, socklen_t,
 };
-use core::ffi::{c_int,c_void};
-use core::time::Duration;
-use axhal::time::wall_time;
-use crate::file::get_file_like;
+use linux_raw_sys::net::{SOCK_DGRAM, SOCK_STREAM};
 
-pub fn sys_getsockname(fd: isize, addr: UserPtr<sockaddr>, addrlen: UserPtr<socklen_t>) -> LinuxResult<isize> {
+pub fn sys_getsockname(
+    fd: isize,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+) -> LinuxResult<isize> {
     info!("sys_getsockname called with fd: {}", fd);
 
     // 检查参数有效性
@@ -38,12 +47,10 @@ pub fn sys_getsockname(fd: isize, addr: UserPtr<sockaddr>, addrlen: UserPtr<sock
     }
 
     // 转换为 Socket
-    let socket = any_socket
-        .downcast::<crate::file::Socket>()
-        .map_err(|_| {
-            error!("Failed to downcast to Socket for fd {}", fd);
-            LinuxError::ENOTSOCK
-        })?;
+    let socket = any_socket.downcast::<crate::file::Socket>().map_err(|_| {
+        error!("Failed to downcast to Socket for fd {}", fd);
+        LinuxError::ENOTSOCK
+    })?;
 
     // 获取 socket 的本地地址
     let local_addr = match socket.as_ref() {
@@ -67,13 +74,13 @@ pub fn sys_getsockname(fd: isize, addr: UserPtr<sockaddr>, addrlen: UserPtr<sock
     info!("local_addr.port().to_be(): {}", local_addr.port().to_be());
     // 从用户空间读取 addrlen
     let mut len = addrlen.get_as_mut()?;
-    
+
     // 写入地址到用户空间
     let written_len = local_addr.write_to_user(addr)?;
-    
+
     // 更新 addrlen
     *len = written_len;
-    
+
     info!("sys_getsockname successfully returned local address");
     Ok(0)
 }

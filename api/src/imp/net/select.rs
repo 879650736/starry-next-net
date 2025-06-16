@@ -1,22 +1,27 @@
+use crate::file::get_file_like;
+use crate::socket::SocketAddrExt;
+use crate::{
+    imp::sys,
+    ptr::{UserConstPtr, UserPtr},
+};
 use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
+use axhal::time::wall_time;
 use axnet::{TcpSocket, UdpSocket};
-use linux_raw_sys::net::{SOCK_STREAM, SOCK_DGRAM};
 use axtask::{TaskExtRef, current};
-use crate::{imp::sys, ptr::{UserConstPtr, UserPtr}};
-use linux_raw_sys::net::{
-    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
-    sockaddr_in6, socklen_t, 
+use core::ffi::{c_int, c_void};
+use core::time::Duration;
+use core::{
+    fmt::Error,
+    mem::{MaybeUninit, size_of},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 use linux_raw_sys::general::{__kernel_fd_set, timeval};
-use crate::socket::SocketAddrExt;
-use core::{
-    fmt::Error, mem::{size_of, MaybeUninit}, net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6}
+use linux_raw_sys::net::{
+    __kernel_sa_family_t, AF_INET, AF_INET6, in_addr, in6_addr, sockaddr, sockaddr_in,
+    sockaddr_in6, socklen_t,
 };
-use core::ffi::{c_int,c_void};
-use core::time::Duration;
-use axhal::time::wall_time;
-use crate::file::get_file_like;
+use linux_raw_sys::net::{SOCK_DGRAM, SOCK_STREAM};
 
 //use crate::ctypes;
 
@@ -130,14 +135,19 @@ pub unsafe fn sys_select1(
     exceptfds: *mut __kernel_fd_set,
     timeout: *mut timeval,
 ) -> LinuxResult<c_int> {
-    info!("sys_select1 called with nfds: {}, readfds: {:?}, writefds: {:?}, exceptfds: {:?}, timeout: {:?}",
-        nfds, readfds, writefds, exceptfds, timeout);
+    info!(
+        "sys_select1 called with nfds: {}, readfds: {:?}, writefds: {:?}, exceptfds: {:?}, timeout: {:?}",
+        nfds, readfds, writefds, exceptfds, timeout
+    );
     if nfds < 0 {
         return Err(LinuxError::EINVAL);
     }
     let nfds = (nfds as usize).min(FD_SETSIZE);
-    let deadline = unsafe { 
-    timeout.as_ref().map(|t| wall_time() + Duration::new(t.tv_sec as u64, t.tv_usec as u32 * 1000)) };
+    let deadline = unsafe {
+        timeout
+            .as_ref()
+            .map(|t| wall_time() + Duration::new(t.tv_sec as u64, t.tv_usec as u32 * 1000))
+    };
     let fd_sets = FdSets::from(nfds, readfds, writefds, exceptfds);
 
     unsafe {
@@ -176,32 +186,31 @@ unsafe fn set_fd_set(fds: *mut __kernel_fd_set, fd: usize) {
     }
 }
 
-
 pub fn sys_select(
     nfds: i32,
     readfds: UserPtr<__kernel_fd_set>,
     writefds: UserPtr<__kernel_fd_set>,
     exceptfds: UserPtr<__kernel_fd_set>,
-    timeout: UserPtr<timeval>
+    timeout: UserPtr<timeval>,
 ) -> LinuxResult<isize> {
     info!("sys_select called with nfds: {}", nfds);
-    let mut readfds_local = __kernel_fd_set {fds_bits: [0; 16]};
+    let mut readfds_local = __kernel_fd_set { fds_bits: [0; 16] };
     let readfds1: &mut __kernel_fd_set = if !readfds.is_null() {
         readfds.get_as_mut()?
     } else {
         &mut readfds_local
     };
     debug!("readfds: {:?}", readfds1);
-    
-    let mut writefds_local = __kernel_fd_set {fds_bits: [0; 16]};
+
+    let mut writefds_local = __kernel_fd_set { fds_bits: [0; 16] };
     let writefds1: &mut __kernel_fd_set = if !writefds.is_null() {
         writefds.get_as_mut()?
     } else {
         &mut writefds_local
     };
     debug!("writefds: {:?}", writefds1);
-    
-    let mut exceptfds_local = __kernel_fd_set {fds_bits: [0; 16]};
+
+    let mut exceptfds_local = __kernel_fd_set { fds_bits: [0; 16] };
     let exceptfds1: &mut __kernel_fd_set = if !exceptfds.is_null() {
         exceptfds.get_as_mut()?
     } else {
@@ -209,7 +218,10 @@ pub fn sys_select(
     };
     debug!("exceptfds: {:?}", exceptfds1);
 
-    let mut timeout_local = timeval {tv_sec: 0, tv_usec: 0};
+    let mut timeout_local = timeval {
+        tv_sec: 0,
+        tv_usec: 0,
+    };
     let timeout1: &mut timeval = if !timeout.is_null() {
         timeout.get_as_mut()?
     } else {
@@ -217,20 +229,14 @@ pub fn sys_select(
     };
     debug!("timeout: {:?}", timeout1);
     let ret: i32;
-    unsafe{
-        ret = sys_select1(
-        nfds,
-        readfds1,
-        writefds1,
-        exceptfds1,
-        timeout1,
-    )?;
+    unsafe {
+        ret = sys_select1(nfds, readfds1, writefds1, exceptfds1, timeout1)?;
     }
 
     Ok(ret as isize)
 }
 
-pub fn sys_pselect6( 
+pub fn sys_pselect6(
     nfds: i32,
     readfds: UserPtr<__kernel_fd_set>,
     writefds: UserPtr<__kernel_fd_set>,
@@ -240,13 +246,7 @@ pub fn sys_pselect6(
 ) -> LinuxResult<isize> {
     info!("sys_pselect6 called with nfds: {}", nfds);
     let sigmask1 = sigmask.get_as_ref()?;
-    let ret = sys_select(
-        nfds,
-        readfds,
-        writefds,
-        exceptfds,
-        timeout,
-    )?;
+    let ret = sys_select(nfds, readfds, writefds, exceptfds, timeout)?;
 
     Ok(ret)
 }

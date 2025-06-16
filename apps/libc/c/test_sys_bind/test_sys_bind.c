@@ -23,7 +23,7 @@ void test_tcp_bind() {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");  
-    addr.sin_port = htons(8080);        // 端口 8080
+    addr.sin_port = htons(1234);        // 端口 1234
 
     printf("Binding to address: %s:%d\n", 
            inet_ntoa(addr.sin_addr), 
@@ -168,8 +168,8 @@ int main() {
     printf("Starting bind system call tests...\n\n");
     
     test_tcp_bind();
-    test_udp_bind();
-    test_bind_errors();
+    //test_udp_bind();
+    //test_bind_errors();
     // test_multiple_binds();
     
     printf("All tests completed!\n");

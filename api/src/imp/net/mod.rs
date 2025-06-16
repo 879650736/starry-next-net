@@ -1,7 +1,7 @@
-mod socket;
-mod select;
 mod getsock;
+mod select;
+mod socket;
 
-pub use self::socket::*;
-pub use self::select::*;
 pub use self::getsock::*;
+pub use self::select::*;
+pub use self::socket::*;
