@@ -1,14 +1,17 @@
 use alloc::{string::String, sync::Arc};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH, api::set_current_dir};
 use axhal::arch::UspaceContext;
+use axhal::time::{monotonic_time, TimeValue};
 use axprocess::{Pid, init_proc};
 use axsignal::Signo;
 use axsync::Mutex;
 use starry_api::file::FD_TABLE;
+use starry_api::APP_EXECUTION_TIMES;
 use starry_core::{
     mm::{copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
     task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
 };
+
 
 pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let mut uspace = new_user_aspace_empty()
@@ -20,6 +23,11 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
         .expect("Failed to create user address space");
 
     let exe_path = args[0].clone();
+
+    let start_time = monotonic_time();
+
+    APP_EXECUTION_TIMES.lock().insert(exe_path.clone(), start_time);
+
     let (dir, name) = exe_path.rsplit_once('/').unwrap_or(("", &exe_path));
     set_current_dir(dir).expect("Failed to set current dir");
 
@@ -32,7 +40,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     task.ctx_mut().set_page_table_root(uspace.page_table_root());
 
     let process_data = ProcessData::new(
-        exe_path,
+        exe_path.clone(),
         Arc::new(Mutex::new(uspace)),
         Arc::default(),
         Some(Signo::SIGCHLD),
@@ -62,5 +70,11 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let task = axtask::spawn_task(task);
 
     // TODO: we need a way to wait on the process but not only the main task
-    task.join()
+    // 在程序结束时记录最终的执行时间
+    let exit_code = task.join();
+    
+    // 任务结束后从APP_EXECUTION_TIMES中移除记录
+    APP_EXECUTION_TIMES.lock().remove(&exe_path);
+    
+    exit_code
 }

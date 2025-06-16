@@ -529,7 +529,7 @@ iperf_run_client(struct iperf_test * test)
         
 
     /* Begin calculating CPU utilization */
-    // cpu_util(NULL);
+    cpu_util(NULL);
     // if (test->mode != SENDER)
     //     rcv_timeout_us = (test->settings->rcv_timeout.secs * SEC_TO_US) + test->settings->rcv_timeout.usecs;
     // else
