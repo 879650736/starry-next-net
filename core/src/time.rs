@@ -79,9 +79,7 @@ impl TimeStat {
         if self.timer_type != TimerType::NONE {
             self.update_timer(delta);
         };
-
-        info!("switch_into_kernel_mode: now_time_ns: {}, delta: {}, utime_ns: {}, kernel_timestamp: {}",
-             now_time_ns, delta, self.utime_ns, self.kernel_timestamp);
+        
         let curr_task = current();
         // 更新系统时间统计
         let process_name = curr_task.task_ext().process_data().exe_path.read().clone();
@@ -104,8 +102,6 @@ impl TimeStat {
             self.update_timer(delta);
         }
 
-        info!("switch_into_user_mode: now_time_ns: {}, delta: {}, stime_ns: {}, kernel_timestamp: {}",
-             now_time_ns, delta, self.stime_ns, self.kernel_timestamp);
         let curr_task = current();
         let current_tick = monotonic_time_nanos() as usize;
         // 更新系统时间统计
