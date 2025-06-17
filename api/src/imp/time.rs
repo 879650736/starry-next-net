@@ -5,13 +5,10 @@ use linux_raw_sys::general::{
 };
 use starry_core::task::time_stat_output;
 use axhal::time::TimeValue;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 use crate::{ptr::UserPtr, time::TimeValueLike};
-
-pub static APP_EXECUTION_TIMES: Mutex<BTreeMap<String, TimeValue>> = Mutex::new(BTreeMap::new());
+use starry_core::task::{APP_EXECUTION_TIMES, AppExecutionStats};
 
 pub fn sys_clock_gettime(
     clock_id: __kernel_clockid_t,
@@ -29,9 +26,9 @@ pub fn sys_clock_gettime(
                 
                 // 从记录中获取进程的启动时间，计算执行时间差
                 let times = APP_EXECUTION_TIMES.lock();
-                if let Some(start_time) = times.get(&exe_path) {
+                if let Some(stat) = times.get(&exe_path) {
                     // 返回从启动到现在的时间差作为CPU时间
-                    current_time.saturating_sub(*start_time)
+                    current_time.saturating_sub(stat.start_time)
                 } else {
                     // 如果没有记录，则返回0时间
                     TimeValue::from_secs(0)

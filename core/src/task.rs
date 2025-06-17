@@ -15,7 +15,7 @@ use alloc::{
 use axerrno::{LinuxError, LinuxResult};
 use axhal::{
     arch::UspaceContext,
-    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos, monotonic_time},
 };
 use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
@@ -31,6 +31,38 @@ use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
 use crate::{futex::FutexTable, time::TimeStat};
+
+use axhal::time::TimeValue;
+use alloc::collections::BTreeMap;
+pub static APP_EXECUTION_TIMES: Mutex<BTreeMap<String, AppExecutionStats>> = Mutex::new(BTreeMap::new());
+
+pub struct AppExecutionStats {
+    pub start_time: TimeValue,
+    pub user_time_ns: Option<usize>,  // 用户态时间
+    pub system_time_ns: Option<usize>, // 内核态时间
+}
+
+impl AppExecutionStats {
+    pub fn new(start_time: TimeValue) -> Self {
+        Self {
+            start_time,
+            user_time_ns: None,
+            system_time_ns: None,
+        }
+    }
+    pub fn update_user_time(&mut self, user_time_ns: usize) {
+        if self.user_time_ns.is_none() {
+            info!("Update user time: {} ns", user_time_ns);
+            self.user_time_ns = Some(user_time_ns);
+        }
+    }
+    pub fn update_system_time(&mut self, system_time_ns: usize) {
+        if self.system_time_ns.is_none() {
+            info!("Update system time: {} ns", system_time_ns);
+            self.system_time_ns = Some(system_time_ns);
+        }
+    }
+}
 
 /// Create a new user task.
 pub fn new_user_task(
@@ -120,6 +152,7 @@ pub fn time_stat_from_user_to_kernel() {
 /// Get the time statistics for the current task.
 pub fn time_stat_output() -> (usize, usize, usize, usize) {
     let curr_task = current();
+    info!("Current task: {}", curr_task.id_name());
     let (utime_ns, stime_ns) = curr_task.task_ext().time_stat_output();
     (
         utime_ns / NANOS_PER_SEC as usize,

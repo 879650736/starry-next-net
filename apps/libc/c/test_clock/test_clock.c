@@ -15,6 +15,7 @@ int main() {
         // 如果需要确保耗时，可以做一些简单的计算，例如：
         volatile int temp = 0;
         temp++;
+        temp--;
     }
 
     clock_t cend = clock(); // 记录结束时间

@@ -10,6 +10,7 @@ use alloc::string::String;
 use axsync::Mutex;
 use axtask::{TaskExtRef, current};
 use crate::{ptr::UserPtr, time::TimeValueLike};
+use starry_core::task::{APP_EXECUTION_TIMES, AppExecutionStats};
 
 pub struct RUsage {
     ru_utime: timeval,    // 用户CPU时间
@@ -30,26 +31,59 @@ pub struct RUsage {
     ru_nivcsw: i64,       // 非自愿上下文切换
 }
 
-pub fn sys_getrusage(who: i32, usage: UserPtr<RUsage>) -> LinuxResult<isize> {
+pub fn sys_getrusage(who: u32, usage: UserPtr<RUsage>) -> LinuxResult<isize> {
     if who != RUSAGE_SELF {
         warn!("sys_getrusage: unsupported 'who' parameter: {}", who);
         return Err(LinuxError::EINVAL);
     }
+    let mut adjusted_utime_ns = 0;
+    let mut adjusted_stime_ns = 0;
+   
+    if let task = current() {
+        let exe_path = task.task_ext().process_data().exe_path.read().clone();
+
+        // 从记录中获取进程的初始时间统计数据
+        let times = APP_EXECUTION_TIMES.lock();
+        if let Some(stats) = times.get(&exe_path) {
+            // 减去初始时间，只计算应用程序实际运行时间
+            info!("stats.user_time_ns.unwrap(): {}, stats.system_time_ns.unwrap(): {}",
+                  stats.user_time_ns.unwrap(), stats.system_time_ns.unwrap());
+             // 获取当前任务的时间统计信息
+            let (_, utime_us, _, stime_us) 
+            = time_stat_output();
+            
+            // 将当前时间转换为纳秒并减去初始时间
+            let current_utime_ns = utime_us * 1_000;
+            let current_stime_ns = stime_us * 1_000;
+            info!("current_utime_ns: {}, current_stime_ns: {}",
+                  current_utime_ns, current_stime_ns);
+            
+            adjusted_utime_ns = current_utime_ns.saturating_sub(stats.user_time_ns.unwrap());
+            adjusted_stime_ns = current_stime_ns.saturating_sub(stats.system_time_ns.unwrap());
+            info!("adjusted_utime_ns: {}, adjusted_stime_ns: {}",
+                  adjusted_utime_ns, adjusted_stime_ns);
+        }
+    }
     
-    // 获取当前任务的时间统计信息
-    // 返回的顺序是：(utime_sec, utime_us, stime_sec, stime_us)
-    let (_, utime_us, _, stime_us) = time_stat_output();
+    // 计算调整后的秒和微秒
+    let adjusted_utime_sec = adjusted_utime_ns / 1_000_000_000;
+    let adjusted_utime_usec = (adjusted_utime_ns % 1_000_000_000) / 1_000;
+    let adjusted_stime_sec = adjusted_stime_ns / 1_000_000_000;
+    let adjusted_stime_usec = (adjusted_stime_ns % 1_000_000_000) / 1_000;
+
+    info!("调整后 utime_sec:{}, utime_usec:{}, stime_sec:{}, stime_usec:{}", 
+          adjusted_utime_sec, adjusted_utime_usec, adjusted_stime_sec, adjusted_stime_usec);
     
     // 填充 RUsage 结构体
     let mut rusage = RUsage {
-        // 将微秒时间转换为 timeval 结构体
+        // 使用调整后的秒和微秒分量填充 timeval
         ru_utime: timeval {
-            tv_sec: (utime_us / 1_000_000) as i64,
-            tv_usec: (utime_us % 1_000_000) as i64,
+            tv_sec: adjusted_utime_sec as i64,
+            tv_usec: adjusted_utime_usec as i64,
         },
         ru_stime: timeval {
-            tv_sec: (stime_us / 1_000_000) as i64,
-            tv_usec: (stime_us % 1_000_000) as i64,
+            tv_sec: adjusted_stime_sec as i64,
+            tv_usec: adjusted_stime_usec as i64,
         },
         // 其他字段设置为0
         ru_maxrss: 0,

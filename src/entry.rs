@@ -6,10 +6,10 @@ use axprocess::{Pid, init_proc};
 use axsignal::Signo;
 use axsync::Mutex;
 use starry_api::file::FD_TABLE;
-use starry_api::APP_EXECUTION_TIMES;
 use starry_core::{
     mm::{copy_from_kernel, load_user_app, map_trampoline, new_user_aspace_empty},
-    task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task},
+    task::{ProcessData, TaskExt, ThreadData, add_thread_to_table, new_user_task
+        , APP_EXECUTION_TIMES, AppExecutionStats, time_stat_output},
 };
 
 
@@ -25,8 +25,7 @@ pub fn run_user_app(args: &[String], envs: &[String]) -> Option<i32> {
     let exe_path = args[0].clone();
 
     let start_time = monotonic_time();
-
-    APP_EXECUTION_TIMES.lock().insert(exe_path.clone(), start_time);
+    APP_EXECUTION_TIMES.lock().insert(exe_path.clone(), AppExecutionStats::new(start_time));
 
     let (dir, name) = exe_path.rsplit_once('/').unwrap_or(("", &exe_path));
     set_current_dir(dir).expect("Failed to set current dir");

@@ -1,3 +1,11 @@
+use crate::task::{APP_EXECUTION_TIMES, AppExecutionStats, ProcessData};
+use axtask::{TaskExtRef, TaskInner, WaitQueue, current};
+use axhal::{
+    arch::UspaceContext,
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos, monotonic_time},
+};
+
+
 numeric_enum_macro::numeric_enum! {
     #[repr(i32)]
     #[allow(non_camel_case_types)]
@@ -71,6 +79,20 @@ impl TimeStat {
         if self.timer_type != TimerType::NONE {
             self.update_timer(delta);
         };
+
+        info!("switch_into_kernel_mode: now_time_ns: {}, delta: {}, utime_ns: {}, kernel_timestamp: {}",
+             now_time_ns, delta, self.utime_ns, self.kernel_timestamp);
+        let curr_task = current();
+        // 更新系统时间统计
+        let process_name = curr_task.task_ext().process_data().exe_path.read().clone();
+        let mut app_times = APP_EXECUTION_TIMES.lock();
+        if let Some(stats) = app_times.get_mut(&process_name) {
+            stats.update_user_time(self.utime_ns);
+        } else {
+            let mut stats = AppExecutionStats::new(monotonic_time());
+            stats.update_user_time(self.utime_ns);
+            app_times.insert(process_name, stats);
+        }
     }
 
     pub fn switch_into_user_mode(&mut self, current_timestamp: usize) {
@@ -80,6 +102,21 @@ impl TimeStat {
         self.user_timestamp = now_time_ns;
         if self.timer_type == TimerType::REAL || self.timer_type == TimerType::PROF {
             self.update_timer(delta);
+        }
+
+        info!("switch_into_user_mode: now_time_ns: {}, delta: {}, stime_ns: {}, kernel_timestamp: {}",
+             now_time_ns, delta, self.stime_ns, self.kernel_timestamp);
+        let curr_task = current();
+        let current_tick = monotonic_time_nanos() as usize;
+        // 更新系统时间统计
+        let process_name = curr_task.task_ext().process_data().exe_path.read().clone();
+        let mut app_times = APP_EXECUTION_TIMES.lock();
+        if let Some(stats) = app_times.get_mut(&process_name) {
+            stats.update_system_time(self.stime_ns);
+        } else {
+            let mut stats = AppExecutionStats::new(monotonic_time());
+            stats.update_system_time(self.stime_ns);
+            app_times.insert(process_name, stats);
         }
     }
 
