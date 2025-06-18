@@ -80,17 +80,15 @@ iperf_create_streams(struct iperf_test *test, int sender)
         return -1;
     }
     int i, s;
-#if defined(HAVE_TCP_CONGESTION)
-    int saved_errno;
-#endif /* HAVE_TCP_CONGESTION */
     struct iperf_stream *sp;
 
     int orig_bind_port = test->bind_port;
+    
     for (i = 0; i < test->num_streams; ++i) {
-
+        printf("iperf_create_streams: test->bind_port = %d\n", orig_bind_port);
         test->bind_port = orig_bind_port;
-	if (orig_bind_port) {
-	    test->bind_port += i;
+        if (orig_bind_port) {
+            test->bind_port += i;
             // If Bidir make sure send and receive ports are different
             if (!sender && test->mode == BIDIRECTIONAL)
                 test->bind_port += test->num_streams;
@@ -99,48 +97,13 @@ iperf_create_streams(struct iperf_test *test, int sender)
         test->bind_port = orig_bind_port;
         if (s < 0)
             return -1;
-
-#if defined(HAVE_TCP_CONGESTION)
-	if (test->protocol->id == Ptcp) {
-	    if (test->congestion) {
-		if (setsockopt(s, IPPROTO_TCP, TCP_CONGESTION, test->congestion, strlen(test->congestion)) < 0) {
-		    saved_errno = errno;
-		    close(s);
-		    errno = saved_errno;
-		    i_errno = IESETCONGESTION;
-		    return -1;
-		}
-	    }
-	    {
-		socklen_t len = TCP_CA_NAME_MAX;
-		char ca[TCP_CA_NAME_MAX + 1];
-                int rc;
-		rc = getsockopt(s, IPPROTO_TCP, TCP_CONGESTION, ca, &len);
-                if (rc < 0 && test->congestion) {
-		    saved_errno = errno;
-		    close(s);
-		    errno = saved_errno;
-		    i_errno = IESETCONGESTION;
-		    return -1;
-		}
-                // Set actual used congestion alg, or set to unknown if could not get it
-                if (rc < 0)
-                    test->congestion_used = strdup("unknown");
-                else
-                    test->congestion_used = strdup(ca);
-		if (test->debug) {
-		    printf("Congestion algorithm is %s\n", test->congestion_used);
-		}
-	    }
-	}
-#endif /* HAVE_TCP_CONGESTION */
-
-	if (sender)
-	    FD_SET(s, &test->write_set);
-	else
-	    FD_SET(s, &test->read_set);
-	if (s > test->max_fd) test->max_fd = s;
-
+        printf("iperf_create_streams: sender %d\n", sender);
+        if (sender)
+            FD_SET(s, &test->write_set);
+        else
+            FD_SET(s, &test->read_set);
+        if (s > test->max_fd)
+            test->max_fd = s;
         sp = iperf_new_stream(test, s, sender);
         if (!sp)
             return -1;
@@ -284,11 +247,14 @@ iperf_handle_message_client(struct iperf_test *test)
     if (NULL == test)
     {
         iperf_err(NULL, "No test\n");
-	i_errno = IEINITTEST;
+	    i_errno = IEINITTEST;
         return -1;
     }
+
+    rval = read(test->ctrl_sck, (char*) &test->state, sizeof(signed char));
+    printf("rval:%d\n",rval);
     /*!!! Why is this read() and not Nread()? */
-    if ((rval = read(test->ctrl_sck, (char*) &test->state, sizeof(signed char))) <= 0) {
+    if (rval <= 0) {
         if (rval == 0) {
             i_errno = IECTRLCLOSE;
             return -1;
@@ -298,14 +264,18 @@ iperf_handle_message_client(struct iperf_test *test)
         }
     }
 
+    printf("test->state: %d\n", test->state);
     switch (test->state) {
         case PARAM_EXCHANGE:
+            printf("PARAM_EXCHANGE\n");
             if (iperf_exchange_parameters(test) < 0)
                 return -1;
             if (test->on_connect)
                 test->on_connect(test);
             break;
         case CREATE_STREAMS:
+            printf("CREATE_STREAMS\n");
+            printf("test->mode: %d\n", test->mode);
             if (test->mode == BIDIRECTIONAL)
             {
                 if (iperf_create_streams(test, 1) < 0)
@@ -412,7 +382,7 @@ iperf_connect(struct iperf_test *test)
         return -1;
     }
 
-
+    printf("Begin Nwrite\n");
     if (Nwrite(test->ctrl_sck, test->cookie, COOKIE_SIZE, Ptcp) < 0) {
         i_errno = IESENDCOOKIE;
         return -1;
@@ -564,20 +534,20 @@ iperf_run_client(struct iperf_test * test)
         iperf_time_now(&now);
         timeout = tmr_timeout(&now);
 
-        // // In reverse active mode client ensures data is received
-        // if (test->state == TEST_RUNNING && rcv_timeout_us > 0) {
-        //     timeout_us = -1;
-        //     if (timeout != NULL) {
-        //         used_timeout.tv_sec = timeout->tv_sec;
-        //         used_timeout.tv_usec = timeout->tv_usec;
-        //         timeout_us = (timeout->tv_sec * SEC_TO_US) + timeout->tv_usec;
-        //     }
-        //     if (timeout_us < 0 || timeout_us > rcv_timeout_us) {
-        //         used_timeout.tv_sec = test->settings->rcv_timeout.secs;
-        //         used_timeout.tv_usec = test->settings->rcv_timeout.usecs;
-        //     }
-        //     timeout = &used_timeout;
-        // }
+        // In reverse active mode client ensures data is received
+        if (test->state == TEST_RUNNING && rcv_timeout_us > 0) {
+            timeout_us = -1;
+            if (timeout != NULL) {
+                used_timeout.tv_sec = timeout->tv_sec;
+                used_timeout.tv_usec = timeout->tv_usec;
+                timeout_us = (timeout->tv_sec * SEC_TO_US) + timeout->tv_usec;
+            }
+            if (timeout_us < 0 || timeout_us > rcv_timeout_us) {
+                used_timeout.tv_sec = test->settings->rcv_timeout.secs;
+                used_timeout.tv_usec = test->settings->rcv_timeout.usecs;
+            }
+            timeout = &used_timeout;
+        }
         // 打印 fd_set 内容
         print_fd_set(&read_set, "read_set");
         print_fd_set(&write_set, "write_set");
@@ -587,25 +557,27 @@ iperf_run_client(struct iperf_test * test)
 	    if (result < 0 && errno != EINTR) {
             i_errno = IESELECT;
             goto cleanup_and_fail;
-            } else if (result == 0 && test->state == TEST_RUNNING && rcv_timeout_us > 0) {
-                // If nothing was received in non-reverse running state then probably something got stack -
-                // either client, server or network, and test should be terminated.
-                iperf_time_now(&now);
-                if (iperf_time_diff(&now, &last_receive_time, &diff_time) == 0) {
-                    t_usecs = iperf_time_in_usecs(&diff_time);
-                    if (t_usecs > rcv_timeout_us) {
-                        i_errno = IENOMSG;
-                        goto cleanup_and_fail;
-                    }
-
+        } else if (result == 0 && test->state == TEST_RUNNING && rcv_timeout_us > 0) {
+            // If nothing was received in non-reverse running state then probably something got stack -
+            // either client, server or network, and test should be terminated.
+            iperf_time_now(&now);
+            if (iperf_time_diff(&now, &last_receive_time, &diff_time) == 0) {
+                t_usecs = iperf_time_in_usecs(&diff_time);
+                if (t_usecs > rcv_timeout_us) {
+                    i_errno = IENOMSG;
+                    goto cleanup_and_fail;
                 }
-            }
 
+            }
+        }
 	    if (result > 0) {
             if (rcv_timeout_us > 0) {
                 iperf_time_now(&last_receive_time);
             }
+            printf("test->ctrl_sck: %d\n", test->ctrl_sck);
+            print_fd_set(&read_set, "read_set after select");
             if (FD_ISSET(test->ctrl_sck, &read_set)) {
+                printf("Handling control message\n");
                 if (iperf_handle_message_client(test) < 0) {
                 goto cleanup_and_fail;
             }
@@ -613,41 +585,42 @@ iperf_run_client(struct iperf_test * test)
             }
 	    }
 
+        printf("test->state: %d\n", test->state);
         if (test->state == TEST_RUNNING) {
 
             /* Is this our first time really running? */
             if (startup) {
                 startup = 0;
 
-            // Set non-blocking for non-UDP tests
-            if (test->protocol->id != Pudp) {
-                SLIST_FOREACH(sp, &test->streams, streams) {
-                setnonblocking(sp->socket, 1);
+                printf("test->protocol->id: %d\n", test->protocol->id);
+                // Set non-blocking for non-UDP tests
+                if (test->protocol->id != Pudp) {
+                    SLIST_FOREACH(sp, &test->streams, streams) {
+                    setnonblocking(sp->socket, 1);
+                    }
                 }
             }
-            }
 
-
-            if (test->mode == BIDIRECTIONAL)
-            {
-                    if (iperf_send(test, &write_set) < 0)
-                        goto cleanup_and_fail;
-                    if (iperf_recv(test, &read_set) < 0)
-                        goto cleanup_and_fail;
+            printf("test->mode: %d\n", test->mode);
+            if (test->mode == BIDIRECTIONAL){
+                if (iperf_send(test, &write_set) < 0)
+                    goto cleanup_and_fail;
+                if (iperf_recv(test, &read_set) < 0)
+                    goto cleanup_and_fail;
             } else if (test->mode == SENDER) {
-                    // Regular mode. Client sends.
-                    if (iperf_send(test, &write_set) < 0)
-                        goto cleanup_and_fail;
+                // Regular mode. Client sends.
+                if (iperf_send(test, &write_set) < 0)
+                    goto cleanup_and_fail;
             } else {
-                    // Reverse mode. Client receives.
-                    if (iperf_recv(test, &read_set) < 0)
-                        goto cleanup_and_fail;
+                // Reverse mode. Client receives.
+                if (iperf_recv(test, &read_set) < 0)
+                    goto cleanup_and_fail;
             }
 
 
-                /* Run the timers. */
-                iperf_time_now(&now);
-                tmr_run(&now);
+            /* Run the timers. */
+            iperf_time_now(&now);
+            tmr_run(&now);
 
             /*
             * Is the test done yet?  We have to be out of omitting
@@ -657,26 +630,36 @@ iperf_run_client(struct iperf_test * test)
             * cases of the client being the sender and the client
             * being the receiver.
             */
+            printf("test->omitting: %d, test->done: %d, test->settings->bytes: %lld, test->bytes_sent: %lld, test->bytes_received: %lld, test->settings->blocks: %lld, test->blocks_sent: %lld, test->blocks_received: %lld\n",
+                test->omitting, test->done,
+                (long long)test->settings->bytes,
+                (long long)test->bytes_sent,
+                (long long)test->bytes_received,
+                (long long)test->settings->blocks,
+                (long long)test->blocks_sent,
+                (long long)test->blocks_received);
             if ((!test->omitting) &&
                 (test->done ||
-                (test->settings->bytes != 0 && (test->bytes_sent >= test->settings->bytes ||
-                            test->bytes_received >= test->settings->bytes)) ||
-                (test->settings->blocks != 0 && (test->blocks_sent >= test->settings->blocks ||
-                            test->blocks_received >= test->settings->blocks)))) {
+                (test->settings->bytes != 0 
+                && (test->bytes_sent >= test->settings->bytes ||
+                test->bytes_received >= test->settings->bytes)) ||
+                (test->settings->blocks != 0 
+                && (test->blocks_sent >= test->settings->blocks ||
+                test->blocks_received >= test->settings->blocks)))) {
 
-            // Unset non-blocking for non-UDP tests
-            if (test->protocol->id != Pudp) {
-                SLIST_FOREACH(sp, &test->streams, streams) {
-                setnonblocking(sp->socket, 0);
+                // Unset non-blocking for non-UDP tests
+                if (test->protocol->id != Pudp) {
+                    SLIST_FOREACH(sp, &test->streams, streams) {
+                    setnonblocking(sp->socket, 0);
+                    }
                 }
-            }
 
-            /* Yes, done!  Send TEST_END. */
-            test->done = 1;
-            cpu_util(test->cpu_util);
-            test->stats_callback(test);
-            if (iperf_set_send_state(test, TEST_END) != 0)
-                        goto cleanup_and_fail;
+                /* Yes, done!  Send TEST_END. */
+                test->done = 1;
+                cpu_util(test->cpu_util);
+                test->stats_callback(test);
+                if (iperf_set_send_state(test, TEST_END) != 0)
+                    goto cleanup_and_fail;
             }
         }
         // If we're in reverse mode, continue draining the data
@@ -690,13 +673,13 @@ iperf_run_client(struct iperf_test * test)
         }
     }
 
-    if (test->json_output) {
-        if (iperf_json_finish(test) < 0)
-            return -1;
-    } else {
-        iperf_printf(test, "\n");
-        iperf_printf(test, "%s", report_done);
-    }
+    // if (test->json_output) {
+    //     if (iperf_json_finish(test) < 0)
+    //         return -1;
+    // } else {
+    //     iperf_printf(test, "\n");
+    //     iperf_printf(test, "%s", report_done);
+    // }
 
     iflush(test);
 

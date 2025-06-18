@@ -369,6 +369,7 @@ iperf_tcp_listen(struct iperf_test *test)
 int
 iperf_tcp_connect(struct iperf_test *test)
 {
+    printf("iperf_tcp_connect\n");
     struct addrinfo *server_res;
     int s, opt;
     socklen_t optlen;
@@ -377,10 +378,11 @@ iperf_tcp_connect(struct iperf_test *test)
 
     s = create_socket(test->settings->domain, SOCK_STREAM, test->bind_address, test->bind_dev, test->bind_port, test->server_hostname, test->server_port, &server_res);
     if (s < 0) {
-	i_errno = IESTREAMCONNECT;
-	return -1;
+	    i_errno = IESTREAMCONNECT;
+	    return -1;
     }
 
+    printf("test->no_delay: %d\n", test->no_delay);
     /* Set socket options */
     if (test->no_delay) {
         opt = 1;
@@ -393,6 +395,7 @@ iperf_tcp_connect(struct iperf_test *test)
             return -1;
         }
     }
+    printf("test->settings->mss: %d\n", test->settings->mss);
     if ((opt = test->settings->mss)) {
         if (setsockopt(s, IPPROTO_TCP, TCP_MAXSEG, &opt, sizeof(opt)) < 0) {
 	    saved_errno = errno;
@@ -403,6 +406,7 @@ iperf_tcp_connect(struct iperf_test *test)
             return -1;
         }
     }
+    printf("test->settings->socket_bufsize: %d\n", test->settings->socket_bufsize);
     if ((opt = test->settings->socket_bufsize)) {
         if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) < 0) {
 	    saved_errno = errno;
@@ -421,138 +425,64 @@ iperf_tcp_connect(struct iperf_test *test)
             return -1;
         }
     }
-#if defined(HAVE_TCP_USER_TIMEOUT)
-    if ((opt = test->settings->snd_timeout)) {
-        if (setsockopt(s, IPPROTO_TCP, TCP_USER_TIMEOUT, &opt, sizeof(opt)) < 0) {
-	    saved_errno = errno;
-	    close(s);
-	    freeaddrinfo(server_res);
-	    errno = saved_errno;
-            i_errno = IESETUSERTIMEOUT;
-            return -1;
-        }
-    }
-#endif /* HAVE_TCP_USER_TIMEOUT */
 
     /* Read back and verify the sender socket buffer size */
     optlen = sizeof(sndbuf_actual);
     if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sndbuf_actual, &optlen) < 0) {
-	saved_errno = errno;
-	close(s);
-	freeaddrinfo(server_res);
-	errno = saved_errno;
-	i_errno = IESETBUF;
-	return -1;
+        saved_errno = errno;
+        close(s);
+        freeaddrinfo(server_res);
+        errno = saved_errno;
+        i_errno = IESETBUF;
+        return -1;
     }
-    if (test->debug) {
+
 	printf("SNDBUF is %u, expecting %u\n", sndbuf_actual, test->settings->socket_bufsize);
-    }
+
     if (test->settings->socket_bufsize && test->settings->socket_bufsize > sndbuf_actual) {
-	i_errno = IESETBUF2;
-	return -1;
+        i_errno = IESETBUF2;
+        return -1;
     }
 
     /* Read back and verify the receiver socket buffer size */
     optlen = sizeof(rcvbuf_actual);
     if (getsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf_actual, &optlen) < 0) {
-	saved_errno = errno;
-	close(s);
-	freeaddrinfo(server_res);
-	errno = saved_errno;
-	i_errno = IESETBUF;
-	return -1;
+        saved_errno = errno;
+        close(s);
+        freeaddrinfo(server_res);
+        errno = saved_errno;
+        i_errno = IESETBUF;
+        return -1;
     }
-    if (test->debug) {
+ 
 	printf("RCVBUF is %u, expecting %u\n", rcvbuf_actual, test->settings->socket_bufsize);
-    }
+    
     if (test->settings->socket_bufsize && test->settings->socket_bufsize > rcvbuf_actual) {
-	i_errno = IESETBUF2;
-	return -1;
+        i_errno = IESETBUF2;
+        return -1;
     }
 
     if (test->json_output) {
-    cJSON *sock_bufsize_item = cJSON_GetObjectItem(test->json_start, "sock_bufsize");
-    if (sock_bufsize_item == NULL) {
-    cJSON_AddNumberToObject(test->json_start, "sock_bufsize", test->settings->socket_bufsize);
+        cJSON *sock_bufsize_item = cJSON_GetObjectItem(test->json_start, "sock_bufsize");
+        if (sock_bufsize_item == NULL) {
+            cJSON_AddNumberToObject(test->json_start, "sock_bufsize", test->settings->socket_bufsize);
+        }
+
+        cJSON *sndbuf_actual_item = cJSON_GetObjectItem(test->json_start, "sndbuf_actual");
+        if (sndbuf_actual_item == NULL) {
+            cJSON_AddNumberToObject(test->json_start, "sndbuf_actual", sndbuf_actual);
+        }
+            
+        cJSON *rcvbuf_actual_item = cJSON_GetObjectItem(test->json_start, "rcvbuf_actual");
+        if (rcvbuf_actual_item == NULL) {
+            cJSON_AddNumberToObject(test->json_start, "rcvbuf_actual", rcvbuf_actual);
+        }
     }
 
-    cJSON *sndbuf_actual_item = cJSON_GetObjectItem(test->json_start, "sndbuf_actual");
-    if (sndbuf_actual_item == NULL) {
-	cJSON_AddNumberToObject(test->json_start, "sndbuf_actual", sndbuf_actual);
-    }
-        
-    cJSON *rcvbuf_actual_item = cJSON_GetObjectItem(test->json_start, "rcvbuf_actual");
-    if (rcvbuf_actual_item == NULL) {
-	cJSON_AddNumberToObject(test->json_start, "rcvbuf_actual", rcvbuf_actual);
-    }
-    }
-
-#if defined(HAVE_FLOWLABEL)
-    if (test->settings->flowlabel) {
-        if (server_res->ai_addr->sa_family != AF_INET6) {
-	    saved_errno = errno;
-	    close(s);
-	    freeaddrinfo(server_res);
-	    errno = saved_errno;
-            i_errno = IESETFLOW;
-            return -1;
-	} else {
-	    struct sockaddr_in6* sa6P = (struct sockaddr_in6*) server_res->ai_addr;
-            char freq_buf[sizeof(struct in6_flowlabel_req)];
-            struct in6_flowlabel_req *freq = (struct in6_flowlabel_req *)freq_buf;
-            int freq_len = sizeof(*freq);
-
-            memset(freq, 0, sizeof(*freq));
-            freq->flr_label = htonl(test->settings->flowlabel & IPV6_FLOWINFO_FLOWLABEL);
-            freq->flr_action = IPV6_FL_A_GET;
-            freq->flr_flags = IPV6_FL_F_CREATE;
-            freq->flr_share = IPV6_FL_S_ANY;
-            memcpy(&freq->flr_dst, &sa6P->sin6_addr, 16);
-
-            if (setsockopt(s, IPPROTO_IPV6, IPV6_FLOWLABEL_MGR, freq, freq_len) < 0) {
-		saved_errno = errno;
-                close(s);
-                freeaddrinfo(server_res);
-		errno = saved_errno;
-                i_errno = IESETFLOW;
-                return -1;
-            }
-            sa6P->sin6_flowinfo = freq->flr_label;
-
-            opt = 1;
-            if (setsockopt(s, IPPROTO_IPV6, IPV6_FLOWINFO_SEND, &opt, sizeof(opt)) < 0) {
-		saved_errno = errno;
-                close(s);
-                freeaddrinfo(server_res);
-		errno = saved_errno;
-                i_errno = IESETFLOW;
-                return -1;
-            }
-	}
-    }
-#endif /* HAVE_FLOWLABEL */
-
-#if defined(HAVE_SO_MAX_PACING_RATE)
-    /* If socket pacing is specified try to enable it. */
-    if (test->settings->fqrate) {
-	/* Convert bits per second to bytes per second */
-	unsigned int fqrate = test->settings->fqrate / 8;
-	if (fqrate > 0) {
-	    if (test->debug) {
-		printf("Setting fair-queue socket pacing to %u\n", fqrate);
-	    }
-	    if (setsockopt(s, SOL_SOCKET, SO_MAX_PACING_RATE, &fqrate, sizeof(fqrate)) < 0) {
-		warning("Unable to set socket pacing");
-	    }
-	}
-    }
-#endif /* HAVE_SO_MAX_PACING_RATE */
     {
 	unsigned int rate = test->settings->rate / 8;
 	if (rate > 0) {
-	    if (test->debug) {
-		printf("Setting application pacing to %u\n", rate);
-	    }
+	    printf("Setting application pacing to %u\n", rate);
 	}
     }
 
@@ -560,10 +490,10 @@ iperf_tcp_connect(struct iperf_test *test)
     iperf_common_sockopts(test, s);
 
     if (connect(s, (struct sockaddr *) server_res->ai_addr, server_res->ai_addrlen) < 0 && errno != EINPROGRESS) {
-	saved_errno = errno;
-	close(s);
-	freeaddrinfo(server_res);
-	errno = saved_errno;
+        saved_errno = errno;
+        close(s);
+        freeaddrinfo(server_res);
+        errno = saved_errno;
         i_errno = IESTREAMCONNECT;
         return -1;
     }
@@ -572,9 +502,9 @@ iperf_tcp_connect(struct iperf_test *test)
 
     /* Send cookie for verification */
     if (Nwrite(s, test->cookie, COOKIE_SIZE, Ptcp) < 0) {
-	saved_errno = errno;
-	close(s);
-	errno = saved_errno;
+        saved_errno = errno;
+        close(s);
+        errno = saved_errno;
         i_errno = IESENDCOOKIE;
         return -1;
     }

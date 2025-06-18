@@ -1,40 +1,6 @@
-/*
-  Copyright (c) 2009-2017 Dave Gamble and cJSON contributors
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in
-  all copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-  THE SOFTWARE.
-*/
-
-/* cJSON */
-/* JSON parser in C. */
-
-/* disable warnings about old C89 functions in MSVC */
-#if !defined(_CRT_SECURE_NO_DEPRECATE) && defined(_MSC_VER)
-#define _CRT_SECURE_NO_DEPRECATE
-#endif
 
 #ifdef __GNUC__
 #pragma GCC visibility push(default)
-#endif
-#if defined(_MSC_VER)
-#pragma warning (push)
-/* disable warning about single line comments in system headers */
-#pragma warning (disable : 4001)
 #endif
 
 #include "iperf_config.h"
@@ -54,9 +20,6 @@
 #include <locale.h>
 #endif
 
-#if defined(_MSC_VER)
-#pragma warning (pop)
-#endif
 #ifdef __GNUC__
 #pragma GCC visibility pop
 #endif
@@ -184,25 +147,9 @@ typedef struct internal_hooks
     void *(CJSON_CDECL *reallocate)(void *pointer, size_t size);
 } internal_hooks;
 
-#if defined(_MSC_VER)
-/* work around MSVC error C2322: '...' address of dllimport '...' is not static */
-static void * CJSON_CDECL internal_malloc(size_t size)
-{
-    return malloc(size);
-}
-static void CJSON_CDECL internal_free(void *pointer)
-{
-    free(pointer);
-}
-static void * CJSON_CDECL internal_realloc(void *pointer, size_t size)
-{
-    return realloc(pointer, size);
-}
-#else
 #define internal_malloc malloc
 #define internal_free free
 #define internal_realloc realloc
-#endif
 
 /* strlen of character literals resolved at compile time */
 #define static_strlen(string_literal) (sizeof(string_literal) - sizeof(""))
@@ -264,6 +211,8 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 /* Internal constructor. */
 static cJSON *cJSON_New_Item(const internal_hooks * const hooks)
 {
+    /* FIXME: In StarryOS must be cJSON_InitHooks*/
+    cJSON_InitHooks(NULL); 
     cJSON* node = (cJSON*)hooks->allocate(sizeof(cJSON));
     if (node)
     {
@@ -2556,7 +2505,9 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateArray(void)
 
 CJSON_PUBLIC(cJSON *) cJSON_CreateObject(void)
 {
+    printf("cJSON_CreateObject\n");
     cJSON *item = cJSON_New_Item(&global_hooks);
+    printf("item = %p\n", item);
     if (item)
     {
         item->type = cJSON_Object;

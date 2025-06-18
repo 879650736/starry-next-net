@@ -33,18 +33,6 @@
 #include <stdarg.h>
 #include <math.h>
 
-#if defined(HAVE_CPUSET_SETAFFINITY)
-#include <sys/param.h>
-#include <sys/cpuset.h>
-#endif /* HAVE_CPUSET_SETAFFINITY */
-
-#if defined(__CYGWIN__) || defined(_WIN32) || defined(_WIN64) || defined(__WINDOWS__)
-#define CPU_SETSIZE __CPU_SETSIZE
-#endif /* __CYGWIN__, _WIN32, _WIN64, __WINDOWS__ */
-
-#if defined(HAVE_SETPROCESSAFFINITYMASK)
-#include <Windows.h>
-#endif /* HAVE_SETPROCESSAFFINITYMASK */
 
 #include "net.h"
 #include "iperf.h"
@@ -840,19 +828,20 @@ iperf_on_connect(struct iperf_test *test)
 
     now_secs = time((time_t*) 0);
     (void) strftime(now_str, sizeof(now_str), rfc1123_fmt, gmtime(&now_secs));
+    printf("test->json_output: %d, test->verbose: %d\n", test->json_output, test->verbose);
     if (test->json_output)
-	cJSON_AddItemToObject(test->json_start, "timestamp", iperf_json_printf("time: %s  timesecs: %d", now_str, (int64_t) now_secs));
+	    cJSON_AddItemToObject(test->json_start, "timestamp", iperf_json_printf("time: %s  timesecs: %d", now_str, (int64_t) now_secs));
     else if (test->verbose)
-	iperf_printf(test, report_time, now_str);
+	    iperf_printf(test, report_time, now_str);
 
     if (test->role == 'c') {
-	if (test->json_output)
-	    cJSON_AddItemToObject(test->json_start, "connecting_to", iperf_json_printf("host: %s  port: %d", test->server_hostname, (int64_t) test->server_port));
-	else {
-	    iperf_printf(test, report_connecting, test->server_hostname, test->server_port);
-	    if (test->reverse)
-		iperf_printf(test, report_reverse, test->server_hostname);
-	}
+        if (test->json_output)
+            cJSON_AddItemToObject(test->json_start, "connecting_to", iperf_json_printf("host: %s  port: %d", test->server_hostname, (int64_t) test->server_port));
+        else {
+            iperf_printf(test, report_connecting, test->server_hostname, test->server_port);
+            if (test->reverse)
+            iperf_printf(test, report_reverse, test->server_hostname);
+        }
     } else {
         len = sizeof(sa);
         getpeername(test->ctrl_sck, (struct sockaddr *) &sa, &len);
@@ -865,24 +854,24 @@ iperf_on_connect(struct iperf_test *test)
             inet_ntop(AF_INET6, &sa_in6P->sin6_addr, ipr, sizeof(ipr));
 	    port = ntohs(sa_in6P->sin6_port);
         }
-	if (mapped_v4_to_regular_v4(ipr)) {
-	    iperf_set_mapped_v4(test, 1);
-	}
-	if (test->json_output)
-	    cJSON_AddItemToObject(test->json_start, "accepted_connection", iperf_json_printf("host: %s  port: %d", ipr, (int64_t) port));
-	else
-	    iperf_printf(test, report_accepted, ipr, port);
+        if (mapped_v4_to_regular_v4(ipr)) {
+            iperf_set_mapped_v4(test, 1);
+        }
+        if (test->json_output)
+            cJSON_AddItemToObject(test->json_start, "accepted_connection", iperf_json_printf("host: %s  port: %d", ipr, (int64_t) port));
+        else
+            iperf_printf(test, report_accepted, ipr, port);
     }
     if (test->json_output) {
-	cJSON_AddStringToObject(test->json_start, "cookie", test->cookie);
+	    cJSON_AddStringToObject(test->json_start, "cookie", test->cookie);
         if (test->protocol->id == SOCK_STREAM) {
-	    if (test->settings->mss)
-		cJSON_AddNumberToObject(test->json_start, "tcp_mss", test->settings->mss);
-	    else {
-		cJSON_AddNumberToObject(test->json_start, "tcp_mss_default", test->ctrl_sck_mss);
-	    }
-        }
-	// Duplicate to make sure it appears on all output
+            if (test->settings->mss)
+                cJSON_AddNumberToObject(test->json_start, "tcp_mss", test->settings->mss);
+            else {
+                cJSON_AddNumberToObject(test->json_start, "tcp_mss_default", test->ctrl_sck_mss);
+            }
+        }   
+	    // Duplicate to make sure it appears on all output
         cJSON_AddNumberToObject(test->json_start, "target_bitrate", test->settings->rate);
         cJSON_AddNumberToObject(test->json_start, "fq_rate", test->settings->fqrate);
     } else if (test->verbose) {
@@ -1751,9 +1740,9 @@ iperf_exchange_parameters(struct iperf_test *test)
 {
     int s;
     int32_t err;
-
+    printf("iperf_exchange_parameters: role %c\n", test->role);
     if (test->role == 'c') {
-
+        printf("iperf_exchange_parameters: client\n");
         if (send_parameters(test) < 0)
             return -1;
 
@@ -1784,8 +1773,8 @@ iperf_exchange_parameters(struct iperf_test *test)
         test->prot_listener = s;
 
         // Send the control message to create streams and start the test
-	if (iperf_set_send_state(test, CREATE_STREAMS) != 0)
-            return -1;
+        if (iperf_set_send_state(test, CREATE_STREAMS) != 0)
+                return -1;
 
     }
 
@@ -1820,80 +1809,80 @@ iperf_exchange_results(struct iperf_test *test)
 static int
 send_parameters(struct iperf_test *test)
 {
+    printf("begin send_parameters\n");
     int r = 0;
     cJSON *j;
-
     j = cJSON_CreateObject();
+    printf("j = %p\n", j);
     if (j == NULL) {
-	i_errno = IESENDPARAMS;
-	r = -1;
+        i_errno = IESENDPARAMS;
+        r = -1;
     } else {
-	if (test->protocol->id == Ptcp)
-	    cJSON_AddTrueToObject(j, "tcp");
-	else if (test->protocol->id == Pudp)
-	    cJSON_AddTrueToObject(j, "udp");
+        if (test->protocol->id == Ptcp)
+            cJSON_AddTrueToObject(j, "tcp");
+        else if (test->protocol->id == Pudp)
+            cJSON_AddTrueToObject(j, "udp");
         else if (test->protocol->id == Psctp)
             cJSON_AddTrueToObject(j, "sctp");
-	cJSON_AddNumberToObject(j, "omit", test->omit);
-	if (test->server_affinity != -1)
-	    cJSON_AddNumberToObject(j, "server_affinity", test->server_affinity);
-	cJSON_AddNumberToObject(j, "time", test->duration);
+        cJSON_AddNumberToObject(j, "omit", test->omit);
+        if (test->server_affinity != -1)
+            cJSON_AddNumberToObject(j, "server_affinity", test->server_affinity);
+        cJSON_AddNumberToObject(j, "time", test->duration);
         cJSON_AddNumberToObject(j, "num", test->settings->bytes);
         cJSON_AddNumberToObject(j, "blockcount", test->settings->blocks);
-	if (test->settings->mss)
-	    cJSON_AddNumberToObject(j, "MSS", test->settings->mss);
-	if (test->no_delay)
-	    cJSON_AddTrueToObject(j, "nodelay");
-	cJSON_AddNumberToObject(j, "parallel", test->num_streams);
-	if (test->reverse)
-	    cJSON_AddTrueToObject(j, "reverse");
-	if (test->bidirectional)
-	            cJSON_AddTrueToObject(j, "bidirectional");
-	if (test->settings->socket_bufsize)
-	    cJSON_AddNumberToObject(j, "window", test->settings->socket_bufsize);
-	if (test->settings->blksize)
-	    cJSON_AddNumberToObject(j, "len", test->settings->blksize);
-	if (test->settings->rate)
-	    cJSON_AddNumberToObject(j, "bandwidth", test->settings->rate);
-	if (test->settings->fqrate)
-	    cJSON_AddNumberToObject(j, "fqrate", test->settings->fqrate);
-	if (test->settings->pacing_timer)
-	    cJSON_AddNumberToObject(j, "pacing_timer", test->settings->pacing_timer);
-	if (test->settings->burst)
-	    cJSON_AddNumberToObject(j, "burst", test->settings->burst);
-	if (test->settings->tos)
-	    cJSON_AddNumberToObject(j, "TOS", test->settings->tos);
-	if (test->settings->flowlabel)
-	    cJSON_AddNumberToObject(j, "flowlabel", test->settings->flowlabel);
-	if (test->title)
-	    cJSON_AddStringToObject(j, "title", test->title);
-	if (test->extra_data)
-	    cJSON_AddStringToObject(j, "extra_data", test->extra_data);
-	if (test->congestion)
-	    cJSON_AddStringToObject(j, "congestion", test->congestion);
-	if (test->congestion_used)
-	    cJSON_AddStringToObject(j, "congestion_used", test->congestion_used);
-	if (test->get_server_output)
-	    cJSON_AddNumberToObject(j, "get_server_output", iperf_get_test_get_server_output(test));
-	if (test->udp_counters_64bit)
-	    cJSON_AddNumberToObject(j, "udp_counters_64bit", iperf_get_test_udp_counters_64bit(test));
-	if (test->repeating_payload)
-	    cJSON_AddNumberToObject(j, "repeating_payload", test->repeating_payload);
-	if (test->zerocopy)
-	    cJSON_AddNumberToObject(j, "zerocopy", test->zerocopy);
-	cJSON_AddStringToObject(j, "client_version", IPERF_VERSION);
+        if (test->settings->mss)
+            cJSON_AddNumberToObject(j, "MSS", test->settings->mss);
+        if (test->no_delay)
+            cJSON_AddTrueToObject(j, "nodelay");
+        cJSON_AddNumberToObject(j, "parallel", test->num_streams);
+        if (test->reverse)
+            cJSON_AddTrueToObject(j, "reverse");
+        if (test->bidirectional)
+            cJSON_AddTrueToObject(j, "bidirectional");
+        if (test->settings->socket_bufsize)
+            cJSON_AddNumberToObject(j, "window", test->settings->socket_bufsize);
+        if (test->settings->blksize)
+            cJSON_AddNumberToObject(j, "len", test->settings->blksize);
+        if (test->settings->rate)
+            cJSON_AddNumberToObject(j, "bandwidth", test->settings->rate);
+        if (test->settings->fqrate)
+            cJSON_AddNumberToObject(j, "fqrate", test->settings->fqrate);
+        if (test->settings->pacing_timer)
+            cJSON_AddNumberToObject(j, "pacing_timer", test->settings->pacing_timer);
+        if (test->settings->burst)
+            cJSON_AddNumberToObject(j, "burst", test->settings->burst);
+        if (test->settings->tos)
+            cJSON_AddNumberToObject(j, "TOS", test->settings->tos);
+        if (test->settings->flowlabel)
+            cJSON_AddNumberToObject(j, "flowlabel", test->settings->flowlabel);
+        if (test->title)
+            cJSON_AddStringToObject(j, "title", test->title);
+        if (test->extra_data)
+            cJSON_AddStringToObject(j, "extra_data", test->extra_data);
+        if (test->congestion)
+            cJSON_AddStringToObject(j, "congestion", test->congestion);
+        if (test->congestion_used)
+            cJSON_AddStringToObject(j, "congestion_used", test->congestion_used);
+        if (test->get_server_output)
+            cJSON_AddNumberToObject(j, "get_server_output", iperf_get_test_get_server_output(test));
+        if (test->udp_counters_64bit)
+            cJSON_AddNumberToObject(j, "udp_counters_64bit", iperf_get_test_udp_counters_64bit(test));
+        if (test->repeating_payload)
+            cJSON_AddNumberToObject(j, "repeating_payload", test->repeating_payload);
+        if (test->zerocopy)
+            cJSON_AddNumberToObject(j, "zerocopy", test->zerocopy);
+        cJSON_AddStringToObject(j, "client_version", IPERF_VERSION);
 
-	if (test->debug) {
-	    char *str = cJSON_Print(j);
-	    printf("send_parameters:\n%s\n", str);
-	    cJSON_free(str);
-	}
+        char *str = cJSON_Print(j);
+        printf("send_parameters:\n%s\n", str);
+        cJSON_free(str);
+        
 
-	if (JSON_write(test->ctrl_sck, j) < 0) {
-	    i_errno = IESENDPARAMS;
-	    r = -1;
-	}
-	cJSON_Delete(j);
+        if (JSON_write(test->ctrl_sck, j) < 0) {
+            i_errno = IESENDPARAMS;
+            r = -1;
+        }
+        cJSON_Delete(j);
     }
     return r;
 }
@@ -3864,11 +3853,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
             tempdir = getenv("TMP");
         }
         if (tempdir == 0){
-#if defined(__ANDROID__)
-            tempdir = "/data/local/tmp";
-#else
             tempdir = "/tmp";
-#endif
         }
         snprintf(template, sizeof(template) / sizeof(char), "%s/iperf3.XXXXXX", tempdir);
     }
@@ -3908,6 +3893,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
         free(sp);
         return NULL;
     }
+    printf("sp->buffer_fd: %d, test->settings->blksize: %d \n", sp->buffer_fd, test->settings->blksize);
     if (ftruncate(sp->buffer_fd, test->settings->blksize) < 0) {
         i_errno = IECREATESTREAM;
         free(sp->result);
@@ -3969,26 +3955,27 @@ iperf_common_sockopts(struct iperf_test *test, int s)
 {
     int opt;
 
+    printf("test->settings->tos: %d\n", test->settings->tos);
     /* Set IP TOS */
     if ((opt = test->settings->tos)) {
-	if (getsockdomain(s) == AF_INET6) {
+	    if (getsockdomain(s) == AF_INET6) {
 #ifdef IPV6_TCLASS
-	    if (setsockopt(s, IPPROTO_IPV6, IPV6_TCLASS, &opt, sizeof(opt)) < 0) {
-                i_errno = IESETCOS;
-                return -1;
-            }
-
-	    /* if the control connection was established with a mapped v4 address
-	       then set IP_TOS on v6 stream socket as well */
-	    if (iperf_get_mapped_v4(test)) {
-		if (setsockopt(s, IPPROTO_IP, IP_TOS, &opt, sizeof(opt)) < 0) {
-                    /* ignore any failure of v4 TOS in IPv6 case */
+            if (setsockopt(s, IPPROTO_IPV6, IPV6_TCLASS, &opt, sizeof(opt)) < 0) {
+                    i_errno = IESETCOS;
+                    return -1;
                 }
-            }
-#else
+
+            /* if the control connection was established with a mapped v4 address
+            then set IP_TOS on v6 stream socket as well */
+            if (iperf_get_mapped_v4(test)) {
+            if (setsockopt(s, IPPROTO_IP, IP_TOS, &opt, sizeof(opt)) < 0) {
+                        /* ignore any failure of v4 TOS in IPv6 case */
+                    }
+                }
+    #else
             i_errno = IESETCOS;
             return -1;
-#endif
+    #endif
         } else {
             if (setsockopt(s, IPPROTO_IP, IP_TOS, &opt, sizeof(opt)) < 0) {
                 i_errno = IESETTOS;

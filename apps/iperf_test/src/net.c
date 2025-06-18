@@ -324,7 +324,7 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
 {
     register ssize_t r;
     register size_t nleft = count;
-
+    printf("fd=%d, buf=%p, count=%zu, prot=%d\n", fd, buf, count, prot);
     while (nleft > 0) {
         r = write(fd, buf, nleft);
         if (r < 0) {
