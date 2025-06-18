@@ -51,6 +51,26 @@
 #endif /* TCP_CA_NAME_MAX */
 #endif /* HAVE_TCP_CONGESTION */
 
+static void print_fd_set(fd_set *set, const char *name) {
+    int i;
+    int count = 0;
+    
+    printf("%s = [", name);
+    
+    for (i = 0; i < FD_SETSIZE; i++) {
+        if (FD_ISSET(i, set)) {
+            printf("%d ", i);
+            count++;
+        }
+    }
+    
+    if (count == 0) {
+        printf("empty");
+    }
+    
+    printf("]\n");
+}
+
 int
 iperf_create_streams(struct iperf_test *test, int sender)
 {
@@ -385,84 +405,85 @@ iperf_connect(struct iperf_test *test)
         return -1;
     }
 
-    // // set TCP_NODELAY for lower latency on control messages
-    // int flag = 1;
-    // if (setsockopt(test->ctrl_sck, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int))) {
-    //     i_errno = IESETNODELAY;
-    //     return -1;
-    // }
+    // set TCP_NODELAY for lower latency on control messages
+    int flag = 1;
+    if (setsockopt(test->ctrl_sck, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int))) {
+        i_errno = IESETNODELAY;
+        return -1;
+    }
 
 
-    // if (Nwrite(test->ctrl_sck, test->cookie, COOKIE_SIZE, Ptcp) < 0) {
-    //     i_errno = IESENDCOOKIE;
-    //     return -1;
-    // }
+    if (Nwrite(test->ctrl_sck, test->cookie, COOKIE_SIZE, Ptcp) < 0) {
+        i_errno = IESENDCOOKIE;
+        return -1;
+    }
 
-    // FD_SET(test->ctrl_sck, &test->read_set);
-    // if (test->ctrl_sck > test->max_fd) test->max_fd = test->ctrl_sck;
+    FD_SET(test->ctrl_sck, &test->read_set);
+    if (test->ctrl_sck > test->max_fd) 
+        test->max_fd = test->ctrl_sck;
 
-    // len = sizeof(opt);
-    // if (getsockopt(test->ctrl_sck, IPPROTO_TCP, TCP_MAXSEG, &opt, &len) < 0) {
-    //     test->ctrl_sck_mss = 0;
-    // }
-    // else {
-    //     if (opt > 0 && opt <= MAX_UDP_BLOCKSIZE) {
-    //         test->ctrl_sck_mss = opt;
-    //     }
-    //     else {
-    //         char str[WARN_STR_LEN];
-    //         snprintf(str, sizeof(str),
-    //                  "Ignoring nonsense TCP MSS %d", opt);
-    //         warning(str);
+    len = sizeof(opt);
+    if (getsockopt(test->ctrl_sck, IPPROTO_TCP, TCP_MAXSEG, &opt, &len) < 0) {
+        test->ctrl_sck_mss = 0;
+    }
+    else {
+        if (opt > 0 && opt <= MAX_UDP_BLOCKSIZE) {
+            test->ctrl_sck_mss = opt;
+        }
+        else {
+            char str[WARN_STR_LEN];
+            snprintf(str, sizeof(str),
+                     "Ignoring nonsense TCP MSS %d", opt);
+            warning(str);
 
-    //         test->ctrl_sck_mss = 0;
-    //     }
-    // }
+            test->ctrl_sck_mss = 0;
+        }
+    }
 
-    // if (test->verbose) {
-	// printf("Control connection MSS %d\n", test->ctrl_sck_mss);
-    // }
+    if (test->verbose) {
+	printf("Control connection MSS %d\n", test->ctrl_sck_mss);
+    }
 
-    // /*
-    //  * If we're doing a UDP test and the block size wasn't explicitly
-    //  * set, then use the known MSS of the control connection to pick
-    //  * an appropriate default.  If we weren't able to get the
-    //  * MSS for some reason, then default to something that should
-    //  * work on non-jumbo-frame Ethernet networks.  The goal is to
-    //  * pick a reasonable default that is large but should get from
-    //  * sender to receiver without any IP fragmentation.
-    //  *
-    //  * We assume that the control connection is routed the same as the
-    //  * data packets (thus has the same PMTU).  Also in the case of
-    //  * --reverse tests, we assume that the MTU is the same in both
-    //  * directions.  Note that even if the algorithm guesses wrong,
-    //  * the user always has the option to override.
-    //  */
-    // if (test->protocol->id == Pudp) {
-	// if (test->settings->blksize == 0) {
-	//     if (test->ctrl_sck_mss) {
-	// 	test->settings->blksize = test->ctrl_sck_mss;
-	//     }
-	//     else {
-	// 	test->settings->blksize = DEFAULT_UDP_BLKSIZE;
-	//     }
-	//     if (test->verbose) {
-	// 	printf("Setting UDP block size to %d\n", test->settings->blksize);
-	//     }
-	// }
+    /*
+     * If we're doing a UDP test and the block size wasn't explicitly
+     * set, then use the known MSS of the control connection to pick
+     * an appropriate default.  If we weren't able to get the
+     * MSS for some reason, then default to something that should
+     * work on non-jumbo-frame Ethernet networks.  The goal is to
+     * pick a reasonable default that is large but should get from
+     * sender to receiver without any IP fragmentation.
+     *
+     * We assume that the control connection is routed the same as the
+     * data packets (thus has the same PMTU).  Also in the case of
+     * --reverse tests, we assume that the MTU is the same in both
+     * directions.  Note that even if the algorithm guesses wrong,
+     * the user always has the option to override.
+     */
+    if (test->protocol->id == Pudp) {
+        if (test->settings->blksize == 0) {
+            if (test->ctrl_sck_mss) {
+            test->settings->blksize = test->ctrl_sck_mss;
+            }
+            else {
+            test->settings->blksize = DEFAULT_UDP_BLKSIZE;
+            }
+            if (test->verbose) {
+            printf("Setting UDP block size to %d\n", test->settings->blksize);
+            }
+        }
 
-	// /*
-	//  * Regardless of whether explicitly or implicitly set, if the
-	//  * block size is larger than the MSS, print a warning.
-	//  */
-	// if (test->ctrl_sck_mss > 0 &&
-	//     test->settings->blksize > test->ctrl_sck_mss) {
-	//     char str[WARN_STR_LEN];
-	//     snprintf(str, sizeof(str),
-	// 	     "UDP block size %d exceeds TCP MSS %d, may result in fragmentation / drops", test->settings->blksize, test->ctrl_sck_mss);
-	//     warning(str);
-	// }
-    // }
+        /*
+        * Regardless of whether explicitly or implicitly set, if the
+        * block size is larger than the MSS, print a warning.
+        */
+        if (test->ctrl_sck_mss > 0 &&
+            test->settings->blksize > test->ctrl_sck_mss) {
+            char str[WARN_STR_LEN];
+            snprintf(str, sizeof(str),
+                "UDP block size %d exceeds TCP MSS %d, may result in fragmentation / drops", test->settings->blksize, test->ctrl_sck_mss);
+            warning(str);
+        }
+    }
 
     return 0;
 }
@@ -530,151 +551,156 @@ iperf_run_client(struct iperf_test * test)
 
     /* Begin calculating CPU utilization */
     cpu_util(NULL);
-    // if (test->mode != SENDER)
-    //     rcv_timeout_us = (test->settings->rcv_timeout.secs * SEC_TO_US) + test->settings->rcv_timeout.usecs;
-    // else
-    //     rcv_timeout_us = 0;
+    if (test->mode != SENDER)
+        rcv_timeout_us = (test->settings->rcv_timeout.secs * SEC_TO_US) + test->settings->rcv_timeout.usecs;
+    else
+        rcv_timeout_us = 0;
 
-//     startup = 1;
-//     while (test->state != IPERF_DONE) {
-// 	memcpy(&read_set, &test->read_set, sizeof(fd_set));
-// 	memcpy(&write_set, &test->write_set, sizeof(fd_set));
-// 	iperf_time_now(&now);
-// 	timeout = tmr_timeout(&now);
+    startup = 1;
+    printf("iperf_run_client: test->state: %d\n", test->state);
+    while (test->state != IPERF_DONE) {
+        memcpy(&read_set, &test->read_set, sizeof(fd_set));
+        memcpy(&write_set, &test->write_set, sizeof(fd_set));
+        iperf_time_now(&now);
+        timeout = tmr_timeout(&now);
 
-//         // In reverse active mode client ensures data is received
-//         if (test->state == TEST_RUNNING && rcv_timeout_us > 0) {
-//             timeout_us = -1;
-//             if (timeout != NULL) {
-//                 used_timeout.tv_sec = timeout->tv_sec;
-//                 used_timeout.tv_usec = timeout->tv_usec;
-//                 timeout_us = (timeout->tv_sec * SEC_TO_US) + timeout->tv_usec;
-//             }
-//             if (timeout_us < 0 || timeout_us > rcv_timeout_us) {
-//                 used_timeout.tv_sec = test->settings->rcv_timeout.secs;
-//                 used_timeout.tv_usec = test->settings->rcv_timeout.usecs;
-//             }
-//             timeout = &used_timeout;
-//         }
+        // // In reverse active mode client ensures data is received
+        // if (test->state == TEST_RUNNING && rcv_timeout_us > 0) {
+        //     timeout_us = -1;
+        //     if (timeout != NULL) {
+        //         used_timeout.tv_sec = timeout->tv_sec;
+        //         used_timeout.tv_usec = timeout->tv_usec;
+        //         timeout_us = (timeout->tv_sec * SEC_TO_US) + timeout->tv_usec;
+        //     }
+        //     if (timeout_us < 0 || timeout_us > rcv_timeout_us) {
+        //         used_timeout.tv_sec = test->settings->rcv_timeout.secs;
+        //         used_timeout.tv_usec = test->settings->rcv_timeout.usecs;
+        //     }
+        //     timeout = &used_timeout;
+        // }
+        // 打印 fd_set 内容
+        print_fd_set(&read_set, "read_set");
+        print_fd_set(&write_set, "write_set");
+        printf("test->max_fd + 1: %d\n", test->max_fd + 1);
+        printf("timeout: %p\n", timeout);
+	    result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
+	    if (result < 0 && errno != EINTR) {
+            i_errno = IESELECT;
+            goto cleanup_and_fail;
+            } else if (result == 0 && test->state == TEST_RUNNING && rcv_timeout_us > 0) {
+                // If nothing was received in non-reverse running state then probably something got stack -
+                // either client, server or network, and test should be terminated.
+                iperf_time_now(&now);
+                if (iperf_time_diff(&now, &last_receive_time, &diff_time) == 0) {
+                    t_usecs = iperf_time_in_usecs(&diff_time);
+                    if (t_usecs > rcv_timeout_us) {
+                        i_errno = IENOMSG;
+                        goto cleanup_and_fail;
+                    }
 
-// 	result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
-// 	if (result < 0 && errno != EINTR) {
-//   	    i_errno = IESELECT;
-// 	    goto cleanup_and_fail;
-//         } else if (result == 0 && test->state == TEST_RUNNING && rcv_timeout_us > 0) {
-//             // If nothing was received in non-reverse running state then probably something got stack -
-//             // either client, server or network, and test should be terminated.
-//             iperf_time_now(&now);
-//             if (iperf_time_diff(&now, &last_receive_time, &diff_time) == 0) {
-//                 t_usecs = iperf_time_in_usecs(&diff_time);
-//                 if (t_usecs > rcv_timeout_us) {
-//                     i_errno = IENOMSG;
-//                     goto cleanup_and_fail;
-//                 }
+                }
+            }
 
-//             }
-//         }
+	    if (result > 0) {
+            if (rcv_timeout_us > 0) {
+                iperf_time_now(&last_receive_time);
+            }
+            if (FD_ISSET(test->ctrl_sck, &read_set)) {
+                if (iperf_handle_message_client(test) < 0) {
+                goto cleanup_and_fail;
+            }
+            FD_CLR(test->ctrl_sck, &read_set);
+            }
+	    }
 
-// 	if (result > 0) {
-//             if (rcv_timeout_us > 0) {
-//                 iperf_time_now(&last_receive_time);
-//             }
-// 	    if (FD_ISSET(test->ctrl_sck, &read_set)) {
-//  	        if (iperf_handle_message_client(test) < 0) {
-// 		    goto cleanup_and_fail;
-// 		}
-// 		FD_CLR(test->ctrl_sck, &read_set);
-// 	    }
-// 	}
+        if (test->state == TEST_RUNNING) {
 
-// 	if (test->state == TEST_RUNNING) {
+            /* Is this our first time really running? */
+            if (startup) {
+                startup = 0;
 
-// 	    /* Is this our first time really running? */
-// 	    if (startup) {
-// 	        startup = 0;
-
-// 		// Set non-blocking for non-UDP tests
-// 		if (test->protocol->id != Pudp) {
-// 		    SLIST_FOREACH(sp, &test->streams, streams) {
-// 			setnonblocking(sp->socket, 1);
-// 		    }
-// 		}
-// 	    }
-
-
-// 	    if (test->mode == BIDIRECTIONAL)
-// 	    {
-//                 if (iperf_send(test, &write_set) < 0)
-//                     goto cleanup_and_fail;
-//                 if (iperf_recv(test, &read_set) < 0)
-//                     goto cleanup_and_fail;
-// 	    } else if (test->mode == SENDER) {
-//                 // Regular mode. Client sends.
-//                 if (iperf_send(test, &write_set) < 0)
-//                     goto cleanup_and_fail;
-// 	    } else {
-//                 // Reverse mode. Client receives.
-//                 if (iperf_recv(test, &read_set) < 0)
-//                     goto cleanup_and_fail;
-// 	    }
+            // Set non-blocking for non-UDP tests
+            if (test->protocol->id != Pudp) {
+                SLIST_FOREACH(sp, &test->streams, streams) {
+                setnonblocking(sp->socket, 1);
+                }
+            }
+            }
 
 
-//             /* Run the timers. */
-//             iperf_time_now(&now);
-//             tmr_run(&now);
+            if (test->mode == BIDIRECTIONAL)
+            {
+                    if (iperf_send(test, &write_set) < 0)
+                        goto cleanup_and_fail;
+                    if (iperf_recv(test, &read_set) < 0)
+                        goto cleanup_and_fail;
+            } else if (test->mode == SENDER) {
+                    // Regular mode. Client sends.
+                    if (iperf_send(test, &write_set) < 0)
+                        goto cleanup_and_fail;
+            } else {
+                    // Reverse mode. Client receives.
+                    if (iperf_recv(test, &read_set) < 0)
+                        goto cleanup_and_fail;
+            }
 
-// 	    /*
-// 	     * Is the test done yet?  We have to be out of omitting
-// 	     * mode, and then we have to have fulfilled one of the
-// 	     * ending criteria, either by times, bytes, or blocks.
-// 	     * The bytes and blocks tests needs to handle both the
-// 	     * cases of the client being the sender and the client
-// 	     * being the receiver.
-// 	     */
-// 	    if ((!test->omitting) &&
-// 	        (test->done ||
-// 	         (test->settings->bytes != 0 && (test->bytes_sent >= test->settings->bytes ||
-// 						 test->bytes_received >= test->settings->bytes)) ||
-// 	         (test->settings->blocks != 0 && (test->blocks_sent >= test->settings->blocks ||
-// 						  test->blocks_received >= test->settings->blocks)))) {
 
-// 		// Unset non-blocking for non-UDP tests
-// 		if (test->protocol->id != Pudp) {
-// 		    SLIST_FOREACH(sp, &test->streams, streams) {
-// 			setnonblocking(sp->socket, 0);
-// 		    }
-// 		}
+                /* Run the timers. */
+                iperf_time_now(&now);
+                tmr_run(&now);
 
-// 		/* Yes, done!  Send TEST_END. */
-// 		test->done = 1;
-// 		cpu_util(test->cpu_util);
-// 		test->stats_callback(test);
-// 		if (iperf_set_send_state(test, TEST_END) != 0)
-//                     goto cleanup_and_fail;
-// 	    }
-// 	}
-// 	// If we're in reverse mode, continue draining the data
-// 	// connection(s) even if test is over.  This prevents a
-// 	// deadlock where the server side fills up its pipe(s)
-// 	// and gets blocked, so it can't receive state changes
-// 	// from the client side.
-// 	else if (test->mode == RECEIVER && test->state == TEST_END) {
-// 	    if (iperf_recv(test, &read_set) < 0)
-// 		goto cleanup_and_fail;
-// 	}
-//     }
+            /*
+            * Is the test done yet?  We have to be out of omitting
+            * mode, and then we have to have fulfilled one of the
+            * ending criteria, either by times, bytes, or blocks.
+            * The bytes and blocks tests needs to handle both the
+            * cases of the client being the sender and the client
+            * being the receiver.
+            */
+            if ((!test->omitting) &&
+                (test->done ||
+                (test->settings->bytes != 0 && (test->bytes_sent >= test->settings->bytes ||
+                            test->bytes_received >= test->settings->bytes)) ||
+                (test->settings->blocks != 0 && (test->blocks_sent >= test->settings->blocks ||
+                            test->blocks_received >= test->settings->blocks)))) {
 
-//     if (test->json_output) {
-// 	if (iperf_json_finish(test) < 0)
-// 	    return -1;
-//     } else {
-// 	iperf_printf(test, "\n");
-// 	iperf_printf(test, "%s", report_done);
-//     }
+            // Unset non-blocking for non-UDP tests
+            if (test->protocol->id != Pudp) {
+                SLIST_FOREACH(sp, &test->streams, streams) {
+                setnonblocking(sp->socket, 0);
+                }
+            }
 
-//     iflush(test);
+            /* Yes, done!  Send TEST_END. */
+            test->done = 1;
+            cpu_util(test->cpu_util);
+            test->stats_callback(test);
+            if (iperf_set_send_state(test, TEST_END) != 0)
+                        goto cleanup_and_fail;
+            }
+        }
+        // If we're in reverse mode, continue draining the data
+        // connection(s) even if test is over.  This prevents a
+        // deadlock where the server side fills up its pipe(s)
+        // and gets blocked, so it can't receive state changes
+        // from the client side.
+        else if (test->mode == RECEIVER && test->state == TEST_END) {
+            if (iperf_recv(test, &read_set) < 0)
+            goto cleanup_and_fail;
+        }
+    }
 
-//     return 0;
+    if (test->json_output) {
+        if (iperf_json_finish(test) < 0)
+            return -1;
+    } else {
+        iperf_printf(test, "\n");
+        iperf_printf(test, "%s", report_done);
+    }
+
+    iflush(test);
+
+    return 0;
 
   cleanup_and_fail:
     iperf_client_end(test);
@@ -686,6 +712,6 @@ iperf_run_client(struct iperf_test * test)
         // Also prevents error message logging outside the already closed JSON output.
         return 0;
     }
-//     iflush(test);
-//     return -1;
+    iflush(test);
+    return -1;
 }

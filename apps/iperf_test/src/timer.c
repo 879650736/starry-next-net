@@ -51,9 +51,9 @@ static void
 getnow( struct iperf_time* nowP, struct iperf_time* nowP2 )
 {
     if ( nowP != NULL )
-	*nowP2 = *nowP;
+	    *nowP2 = *nowP;
     else
-	iperf_time_now(nowP2);
+	    iperf_time_now(nowP2);
 }
 
 
@@ -64,9 +64,9 @@ list_add( Timer* t )
     Timer* t2prev;
 
     if ( timers == NULL ) {
-	/* The list is empty. */
-	timers = t;
-	t->prev = t->next = NULL;
+        /* The list is empty. */
+        timers = t;
+        t->prev = t->next = NULL;
     } else {
 	if (iperf_time_compare(&t->time, &timers->time) < 0) {
 	    /* The new timer goes at the head of the list. */
@@ -159,9 +159,10 @@ tmr_timeout( struct iperf_time* nowP )
     static struct timeval timeout;
 
     getnow( nowP, &now );
+    printf("timers: %p\n", timers);
     /* Since the list is sorted, we only need to look at the first timer. */
     if ( timers == NULL )
-	return NULL;
+	    return NULL;
     past = iperf_time_diff(&timers->time, &now, &diff);
     if (past)
         usecs = 0;

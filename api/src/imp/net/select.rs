@@ -43,26 +43,22 @@ impl FdSets {
     ) -> Self {
         let nfds = nfds.min(FD_SETSIZE);
         let nfds_usizes = nfds.div_ceil(BITS_PER_USIZE);
-        let mut bits = core::mem::MaybeUninit::<[usize; FD_SETSIZE_USIZES * 3]>::uninit();
+        let mut bits = [0usize; FD_SETSIZE_USIZES * 3];
+        //let mut bits = core::mem::MaybeUninit::<[usize; FD_SETSIZE_USIZES * 3]>::uninit();
         let bits_ptr: *mut usize = unsafe { core::mem::transmute(bits.as_mut_ptr()) };
 
-        let copy_from_fd_set = |bits_ptr: *mut usize, fds: *const __kernel_fd_set| unsafe {
-            let dst = core::slice::from_raw_parts_mut(bits_ptr, nfds_usizes);
-            if fds.is_null() {
-                dst.fill(0);
-            } else {
+        let copy_from_fd_set = |dst: &mut [usize], fds: *const __kernel_fd_set| unsafe {
+            if !fds.is_null()  {
                 let fds_ptr = (*fds).fds_bits.as_ptr() as *const usize;
                 let src = core::slice::from_raw_parts(fds_ptr, nfds_usizes);
-                dst.copy_from_slice(src);
+                dst[..nfds_usizes].copy_from_slice(src);
             }
         };
 
-        let bits = unsafe {
-            copy_from_fd_set(bits_ptr, read_fds);
-            copy_from_fd_set(bits_ptr.add(FD_SETSIZE_USIZES), write_fds);
-            copy_from_fd_set(bits_ptr.add(FD_SETSIZE_USIZES * 2), except_fds);
-            bits.assume_init()
-        };
+         // 复制位到各个部分
+        copy_from_fd_set(&mut bits[0..FD_SETSIZE_USIZES], read_fds);
+        copy_from_fd_set(&mut bits[FD_SETSIZE_USIZES..2*FD_SETSIZE_USIZES], write_fds);
+        copy_from_fd_set(&mut bits[2*FD_SETSIZE_USIZES..3*FD_SETSIZE_USIZES], except_fds);
         Self { nfds, bits }
     }
 
@@ -81,6 +77,10 @@ impl FdSets {
             let read_bits = unsafe { *read_bits_ptr };
             let write_bits = unsafe { *write_bits_ptr };
             let except_bits = unsafe { *execpt_bits_ptr };
+            info!(
+                "polling bits: read: {:b}, write: {:b}, except: {:b}",
+                read_bits, write_bits, except_bits
+            );
             unsafe {
                 read_bits_ptr = read_bits_ptr.add(1);
                 write_bits_ptr = write_bits_ptr.add(1);
@@ -102,11 +102,14 @@ impl FdSets {
                 let fd = i + j;
                 match get_file_like(fd as _)?.poll() {
                     Ok(state) => {
+                        debug!("    fd: {}, state: {:?}", fd, state);
                         if state.readable && read_bits & bit != 0 {
+                            debug!("    readable: {}", fd);
                             unsafe { set_fd_set(res_read_fds, fd) };
                             res_num += 1;
                         }
                         if state.writable && write_bits & bit != 0 {
+                            debug!("    writable: {}", fd);
                             unsafe { set_fd_set(res_write_fds, fd) };
                             res_num += 1;
                         }
@@ -137,7 +140,7 @@ pub unsafe fn sys_select1(
 ) -> LinuxResult<c_int> {
     info!(
         "sys_select1 called with nfds: {}, readfds: {:?}, writefds: {:?}, exceptfds: {:?}, timeout: {:?}",
-        nfds, readfds, writefds, exceptfds, timeout
+        nfds, *readfds, *writefds, *exceptfds, *timeout
     );
     if nfds < 0 {
         return Err(LinuxError::EINVAL);
@@ -155,15 +158,16 @@ pub unsafe fn sys_select1(
         zero_fd_set(writefds, nfds);
         zero_fd_set(exceptfds, nfds);
     }
-    debug!("    nfds: {}, deadline: {:?}", nfds, deadline);
+    info!("readfds: {:?}, writefds: {:?}, exceptfds: {:?}", *readfds, *writefds, *exceptfds);
     loop {
         axnet::poll_interfaces();
         let res = fd_sets.poll_all(readfds, writefds, exceptfds)?;
         debug!("    res: {}", res);
         if res > 0 {
+            info!("readfds: {:?}, writefds: {:?}, exceptfds: {:?}", *readfds, *writefds, *exceptfds);
             return Ok(res as i32);
         }
-
+        info!("deadline = {:?}, wall_time() = {:?}", deadline, wall_time());
         if deadline.is_some_and(|ddl| wall_time() >= ddl) {
             debug!("    timeout!");
             return Ok(0);
@@ -175,14 +179,16 @@ pub unsafe fn sys_select1(
 unsafe fn zero_fd_set(fds: *mut __kernel_fd_set, nfds: usize) {
     if !fds.is_null() {
         let nfds_usizes = nfds.div_ceil(BITS_PER_USIZE);
-        let dst = &mut unsafe { *fds }.fds_bits[..nfds_usizes];
-        dst.fill(0);
+        for i in 0..nfds_usizes {
+            (*fds).fds_bits[i] = 0;
+        }
     }
 }
 
 unsafe fn set_fd_set(fds: *mut __kernel_fd_set, fd: usize) {
     if !fds.is_null() {
-        unsafe { *fds }.fds_bits[fd / BITS_PER_USIZE] |= 1 << (fd % BITS_PER_USIZE);
+        let fd_set = &mut *fds;  // 正确地解引用指针，获取可变引用
+        fd_set.fds_bits[fd / BITS_PER_USIZE] |= 1 << (fd % BITS_PER_USIZE);
     }
 }
 
