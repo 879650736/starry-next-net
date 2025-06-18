@@ -3900,6 +3900,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
         free(sp);
         return NULL;
     }
+    /* fix  */
     sp->buffer = (char *) mmap(NULL, test->settings->blksize, PROT_READ|PROT_WRITE, MAP_PRIVATE, sp->buffer_fd, 0);
     if (sp->buffer == MAP_FAILED) {
         i_errno = IECREATESTREAM;

@@ -110,3 +110,9 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> LinuxResul
     let off = File::from_fd(fd)?.inner().seek(pos)?;
     Ok(off as _)
 }
+
+pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> LinuxResult<isize> {
+    debug!("sys_ftruncate <= {} {}", fd, length);
+    File::from_fd(fd)?.inner().truncate(length as _)?;
+    Ok(0)
+}
