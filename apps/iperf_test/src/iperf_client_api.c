@@ -36,6 +36,7 @@
 #include <sys/select.h>
 #include <sys/uio.h>
 #include <arpa/inet.h>
+#include <assert.h>
 
 #include "iperf.h"
 #include "iperf_api.h"
@@ -108,6 +109,7 @@ iperf_create_streams(struct iperf_test *test, int sender)
         if (!sp)
             return -1;
 
+        printf("test->on_new_stream: %p\n", test->on_new_stream);
         /* Perform the new stream callback */
         if (test->on_new_stream)
             test->on_new_stream(sp);
@@ -160,19 +162,21 @@ create_client_timers(struct iperf_test * test)
     }
 
     if (iperf_time_now(&now) < 0) {
-	i_errno = IEINITTEST;
-	return -1;
+        i_errno = IEINITTEST;
+        return -1;
     }
     cd.p = test;
     test->timer = test->stats_timer = test->reporter_timer = NULL;
+    printf("test->duration: %d\n", test->duration);
     if (test->duration != 0) {
-	test->done = 0;
+	    test->done = 0;
         test->timer = tmr_create(&now, test_timer_proc, cd, ( test->duration + test->omit ) * SEC_TO_US, 0);
         if (test->timer == NULL) {
             i_errno = IEINITTEST;
             return -1;
-	}
+	    }
     }
+    printf("test->stats_interval: %d\n", test->stats_interval);
     if (test->stats_interval != 0) {
         test->stats_timer = tmr_create(&now, client_stats_timer_proc, cd, test->stats_interval * SEC_TO_US, 1);
         if (test->stats_timer == NULL) {
@@ -180,6 +184,7 @@ create_client_timers(struct iperf_test * test)
             return -1;
 	}
     }
+    printf("test->reporter_interval: %d\n", test->reporter_interval);
     if (test->reporter_interval != 0) {
         test->reporter_timer = tmr_create(&now, client_reporter_timer_proc, cd, test->reporter_interval * SEC_TO_US, 1);
         if (test->reporter_timer == NULL) {
@@ -220,20 +225,20 @@ create_client_omit_timer(struct iperf_test * test)
     }
 
     if (test->omit == 0) {
-	test->omit_timer = NULL;
+	    test->omit_timer = NULL;
         test->omitting = 0;
     } else {
-	if (iperf_time_now(&now) < 0) {
-	    i_errno = IEINITTEST;
-	    return -1;
-	}
-	test->omitting = 1;
-	cd.p = test;
-	test->omit_timer = tmr_create(&now, client_omit_timer_proc, cd, test->omit * SEC_TO_US, 0);
-	if (test->omit_timer == NULL) {
-	    i_errno = IEINITTEST;
-	    return -1;
-	}
+        if (iperf_time_now(&now) < 0) {
+            i_errno = IEINITTEST;
+            return -1;
+        }
+        test->omitting = 1;
+        cd.p = test;
+        test->omit_timer = tmr_create(&now, client_omit_timer_proc, cd, test->omit * SEC_TO_US, 0);
+        if (test->omit_timer == NULL) {
+            i_errno = IEINITTEST;
+            return -1;
+        }
     }
     return 0;
 }
@@ -287,17 +292,20 @@ iperf_handle_message_client(struct iperf_test *test)
                 return -1;
             break;
         case TEST_START:
+            printf("TEST_START\n");
             if (iperf_init_test(test) < 0)
                 return -1;
             if (create_client_timers(test) < 0)
                 return -1;
             if (create_client_omit_timer(test) < 0)
                 return -1;
-	    if (test->mode)
-		if (iperf_create_send_timers(test) < 0)
-		    return -1;
+            printf("test->mode: %d\n", test->mode);
+            if (test->mode)
+                if (iperf_create_send_timers(test) < 0)
+                    return -1;
             break;
         case TEST_RUNNING:
+            printf("TEST_RUNNING\n");
             break;
         case EXCHANGE_RESULTS:
             if (iperf_exchange_results(test) < 0)
@@ -312,16 +320,15 @@ iperf_handle_message_client(struct iperf_test *test)
             break;
         case SERVER_TERMINATE:
             i_errno = IESERVERTERM;
-
-	    /*
-	     * Temporarily be in DISPLAY_RESULTS phase so we can get
-	     * ending summary statistics.
-	     */
-	    signed char oldstate = test->state;
-	    cpu_util(test->cpu_util);
-	    test->state = DISPLAY_RESULTS;
-	    test->reporter_callback(test);
-	    test->state = oldstate;
+            /*
+            * Temporarily be in DISPLAY_RESULTS phase so we can get
+            * ending summary statistics.
+            */
+            signed char oldstate = test->state;
+            cpu_util(test->cpu_util);
+            test->state = DISPLAY_RESULTS;
+            test->reporter_callback(test);
+            test->state = oldstate;
             return -1;
         case ACCESS_DENIED:
             i_errno = IEACCESSDENIED;
@@ -507,7 +514,7 @@ iperf_run_client(struct iperf_test * test)
     int64_t t_usecs;
     int64_t timeout_us;
     int64_t rcv_timeout_us;
-
+    int i = 0;
 
 
     
@@ -529,6 +536,10 @@ iperf_run_client(struct iperf_test * test)
     startup = 1;
     printf("iperf_run_client: test->state: %d\n", test->state);
     while (test->state != IPERF_DONE) {
+        
+        i++;
+        assert(i<8);
+        printf("\x1b[31m" "iperf_run_client: i = %d\n" "\x1b[0m", i);
         memcpy(&read_set, &test->read_set, sizeof(fd_set));
         memcpy(&write_set, &test->write_set, sizeof(fd_set));
         iperf_time_now(&now);
@@ -576,18 +587,20 @@ iperf_run_client(struct iperf_test * test)
             }
             printf("test->ctrl_sck: %d\n", test->ctrl_sck);
             print_fd_set(&read_set, "read_set after select");
+            print_fd_set(&write_set, "write_set after select");
             if (FD_ISSET(test->ctrl_sck, &read_set)) {
                 printf("Handling control message\n");
                 if (iperf_handle_message_client(test) < 0) {
-                goto cleanup_and_fail;
-            }
-            FD_CLR(test->ctrl_sck, &read_set);
+                    goto cleanup_and_fail;
+                }
+                FD_CLR(test->ctrl_sck, &read_set);
             }
 	    }
 
         printf("test->state: %d\n", test->state);
         if (test->state == TEST_RUNNING) {
 
+            printf("startup: %d\n", startup);
             /* Is this our first time really running? */
             if (startup) {
                 startup = 0;
@@ -596,7 +609,8 @@ iperf_run_client(struct iperf_test * test)
                 // Set non-blocking for non-UDP tests
                 if (test->protocol->id != Pudp) {
                     SLIST_FOREACH(sp, &test->streams, streams) {
-                    setnonblocking(sp->socket, 1);
+                        //fix
+                        setnonblocking(sp->socket, 1);
                     }
                 }
             }

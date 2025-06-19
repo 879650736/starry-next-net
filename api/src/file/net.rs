@@ -66,6 +66,13 @@ impl Socket {
         }
     }
 
+    pub fn is_nonblocking(&self) -> bool {
+        match self {
+            Socket::Udp(udpsocket) => udpsocket.lock().is_nonblocking(),
+            Socket::Tcp(tcpsocket) => tcpsocket.lock().is_nonblocking(),
+        }
+    }
+
     impl_socket!(pub fn send(&self, buf: &[u8]) -> LinuxResult<usize>);
     impl_socket!(pub fn poll(&self) -> LinuxResult<PollState>);
     impl_socket!(pub fn local_addr(&self) -> LinuxResult<SocketAddr>);

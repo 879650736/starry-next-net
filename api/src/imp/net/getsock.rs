@@ -84,3 +84,68 @@ pub fn sys_getsockname(
     info!("sys_getsockname successfully returned local address");
     Ok(0)
 }
+
+
+pub fn sys_getpeername(
+    fd: isize,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+) -> LinuxResult<isize> {
+    info!("sys_getpeername called with fd: {}", fd);
+
+    // 检查参数有效性
+    if addr.is_null() || addrlen.is_null() {
+        return Err(LinuxError::EFAULT);
+    }
+
+    // 获取文件描述符对应的 socket
+    let socket = get_file_like(fd as i32)?;
+    info!("sys_getpeername found socket for fd {}", fd);
+
+    // 检查是否为 Socket 类型
+    let any_socket = socket.into_any();
+    if !any_socket.is::<crate::file::Socket>() {
+        error!("Object is NOT Socket type");
+        return Err(LinuxError::ENOTSOCK);
+    }
+
+    // 转换为 Socket
+    let socket = any_socket.downcast::<crate::file::Socket>().map_err(|_| {
+        error!("Failed to downcast to Socket for fd {}", fd);
+        LinuxError::ENOTSOCK
+    })?;
+
+    // 获取 socket 的远程地址
+    let peer_addr = match socket.as_ref() {
+        crate::file::Socket::Tcp(tcp_socket) => {
+            let socket = tcp_socket.lock();
+            socket.peer_addr().map_err(|e| {
+                error!("Failed to get TCP peer address: {:?}", e);
+                LinuxError::EINVAL
+            })?
+        }
+        crate::file::Socket::Udp(udp_socket) => {
+            let socket = udp_socket.lock();
+            socket.peer_addr().map_err(|e| {
+                error!("Failed to get UDP peer address: {:?}", e);
+                LinuxError::EINVAL
+            })?
+        }
+    };
+
+    info!("peer_addr.family: {}", peer_addr.family());
+    info!("peer_addr: {}", peer_addr);
+    info!("peer_addr.port().to_be(): {}", peer_addr.port().to_be());
+
+    // 从用户空间读取 addrlen
+    let mut len = addrlen.get_as_mut()?;
+
+    // 写入地址到用户空间
+    let written_len = peer_addr.write_to_user(addr)?;
+
+    // 更新 addrlen
+    *len = written_len;
+
+    info!("sys_getpeername successfully returned peer address");
+    Ok(0)
+}

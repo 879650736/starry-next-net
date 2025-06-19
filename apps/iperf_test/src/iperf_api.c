@@ -778,7 +778,7 @@ void
 iperf_on_test_start(struct iperf_test *test)
 {
     if (test->json_output) {
-	cJSON_AddItemToObject(test->json_start, "test_start", iperf_json_printf("protocol: %s  num_streams: %d  blksize: %d  omit: %d  duration: %d  bytes: %d  blocks: %d  reverse: %d  tos: %d  target_bitrate: %d bidir: %d fqrate: %d", test->protocol->name, (int64_t) test->num_streams, (int64_t) test->settings->blksize, (int64_t) test->omit, (int64_t) test->duration, (int64_t) test->settings->bytes, (int64_t) test->settings->blocks, test->reverse?(int64_t)1:(int64_t)0, (int64_t) test->settings->tos, (int64_t) test->settings->rate, (int64_t) test->bidirectional, (uint64_t) test->settings->fqrate));
+	    cJSON_AddItemToObject(test->json_start, "test_start", iperf_json_printf("protocol: %s  num_streams: %d  blksize: %d  omit: %d  duration: %d  bytes: %d  blocks: %d  reverse: %d  tos: %d  target_bitrate: %d bidir: %d fqrate: %d", test->protocol->name, (int64_t) test->num_streams, (int64_t) test->settings->blksize, (int64_t) test->omit, (int64_t) test->duration, (int64_t) test->settings->bytes, (int64_t) test->settings->blocks, test->reverse?(int64_t)1:(int64_t)0, (int64_t) test->settings->tos, (int64_t) test->settings->rate, (int64_t) test->bidirectional, (uint64_t) test->settings->fqrate));
     } else {
 	if (test->verbose) {
 	    if (test->settings->bytes)
@@ -806,9 +806,9 @@ mapped_v4_to_regular_v4(char *str)
 
     prefix_len = strlen(prefix);
     if (strncmp(str, prefix, prefix_len) == 0) {
-	int str_len = strlen(str);
-	memmove(str, str + prefix_len, str_len - prefix_len + 1);
-	return 1;
+        int str_len = strlen(str);
+        memmove(str, str + prefix_len, str_len - prefix_len + 1);
+        return 1;
     }
     return 0;
 }
@@ -1679,11 +1679,11 @@ iperf_init_test(struct iperf_test *test)
 
     /* Init each stream. */
     if (iperf_time_now(&now) < 0) {
-	i_errno = IEINITTEST;
-	return -1;
+        i_errno = IEINITTEST;
+        return -1;
     }
     SLIST_FOREACH(sp, &test->streams, streams) {
-	sp->result->start_time = sp->result->start_time_fixed = now;
+	    sp->result->start_time = sp->result->start_time_fixed = now;
     }
 
     if (test->on_test_start)
@@ -1712,19 +1712,19 @@ iperf_create_send_timers(struct iperf_test * test)
     TimerClientData cd;
 
     if (iperf_time_now(&now) < 0) {
-	i_errno = IEINITTEST;
-	return -1;
+        i_errno = IEINITTEST;
+        return -1;
     }
     SLIST_FOREACH(sp, &test->streams, streams) {
         sp->green_light = 1;
-	if (test->settings->rate != 0 && sp->sender) {
-	    cd.p = sp;
-	    sp->send_timer = tmr_create(NULL, send_timer_proc, cd, test->settings->pacing_timer, 1);
-	    if (sp->send_timer == NULL) {
-		i_errno = IEINITTEST;
-		return -1;
-	    }
-	}
+        if (test->settings->rate != 0 && sp->sender) {
+            cd.p = sp;
+            sp->send_timer = tmr_create(NULL, send_timer_proc, cd, test->settings->pacing_timer, 1);
+            if (sp->send_timer == NULL) {
+            i_errno = IEINITTEST;
+            return -1;
+            }
+        }
     }
     return 0;
 }
@@ -2376,16 +2376,16 @@ connect_msg(struct iperf_stream *sp)
 
     if (getsockdomain(sp->socket) == AF_INET) {
         inet_ntop(AF_INET, (void *) &((struct sockaddr_in *) &sp->local_addr)->sin_addr, ipl, sizeof(ipl));
-	mapped_v4_to_regular_v4(ipl);
+	    mapped_v4_to_regular_v4(ipl);
         inet_ntop(AF_INET, (void *) &((struct sockaddr_in *) &sp->remote_addr)->sin_addr, ipr, sizeof(ipr));
-	mapped_v4_to_regular_v4(ipr);
+	    mapped_v4_to_regular_v4(ipr);
         lport = ntohs(((struct sockaddr_in *) &sp->local_addr)->sin_port);
         rport = ntohs(((struct sockaddr_in *) &sp->remote_addr)->sin_port);
     } else {
         inet_ntop(AF_INET6, (void *) &((struct sockaddr_in6 *) &sp->local_addr)->sin6_addr, ipl, sizeof(ipl));
-	mapped_v4_to_regular_v4(ipl);
+	    mapped_v4_to_regular_v4(ipl);
         inet_ntop(AF_INET6, (void *) &((struct sockaddr_in6 *) &sp->remote_addr)->sin6_addr, ipr, sizeof(ipr));
-	mapped_v4_to_regular_v4(ipr);
+	    mapped_v4_to_regular_v4(ipr);
         lport = ntohs(((struct sockaddr_in6 *) &sp->local_addr)->sin6_port);
         rport = ntohs(((struct sockaddr_in6 *) &sp->remote_addr)->sin6_port);
     }
@@ -2393,7 +2393,7 @@ connect_msg(struct iperf_stream *sp)
     if (sp->test->json_output)
         cJSON_AddItemToArray(sp->test->json_connected, iperf_json_printf("socket: %d  local_host: %s  local_port: %d  remote_host: %s  remote_port: %d", (int64_t) sp->socket, ipl, (int64_t) lport, ipr, (int64_t) rport));
     else
-	iperf_printf(sp->test, report_connected, sp->socket, ipl, lport, ipr, rport);
+	    iperf_printf(sp->test, report_connected, sp->socket, ipl, lport, ipr, rport);
 }
 
 
@@ -3900,7 +3900,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
         free(sp);
         return NULL;
     }
-    /* fix  */
+
     sp->buffer = (char *) mmap(NULL, test->settings->blksize, PROT_READ|PROT_WRITE, MAP_PRIVATE, sp->buffer_fd, 0);
     if (sp->buffer == MAP_FAILED) {
         i_errno = IECREATESTREAM;
@@ -3917,21 +3917,22 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     sp->rcv = test->protocol->recv;
 
     if (test->diskfile_name != (char*) 0) {
-	sp->diskfile_fd = open(test->diskfile_name, sender ? O_RDONLY : (O_WRONLY|O_CREAT|O_TRUNC), S_IRUSR|S_IWUSR);
-	if (sp->diskfile_fd == -1) {
-	    i_errno = IEFILE;
-            munmap(sp->buffer, sp->test->settings->blksize);
-            free(sp->result);
-            free(sp);
-	    return NULL;
-	}
-        sp->snd2 = sp->snd;
-	sp->snd = diskfile_send;
-	sp->rcv2 = sp->rcv;
-	sp->rcv = diskfile_recv;
+	    sp->diskfile_fd = open(test->diskfile_name, sender ? O_RDONLY : (O_WRONLY|O_CREAT|O_TRUNC), S_IRUSR|S_IWUSR);
+        if (sp->diskfile_fd == -1) {
+            i_errno = IEFILE;
+                munmap(sp->buffer, sp->test->settings->blksize);
+                free(sp->result);
+                free(sp);
+            return NULL;
+        }
+            sp->snd2 = sp->snd;
+        sp->snd = diskfile_send;
+        sp->rcv2 = sp->rcv;
+        sp->rcv = diskfile_recv;
     } else
         sp->diskfile_fd = -1;
 
+    printf("test->repeating_payload: %d\n", test->repeating_payload);
     /* Initialize stream */
     if (test->repeating_payload)
         fill_with_repeating_pattern(sp->buffer, test->settings->blksize);
@@ -4004,47 +4005,6 @@ iperf_init_stream(struct iperf_stream *sp, struct iperf_test *test)
         i_errno = IEINITSTREAM;
         return -1;
     }
-
-#if defined(HAVE_DONT_FRAGMENT)
-    /* Set Don't Fragment (DF). Only applicable to IPv4/UDP tests. */
-    if (iperf_get_test_protocol_id(test) == Pudp &&
-        getsockdomain(sp->socket) == AF_INET &&
-        iperf_get_dont_fragment(test)) {
-
-        /*
-         * There are multiple implementations of this feature depending on the OS.
-         * We need to handle separately Linux, UNIX, and Windows, as well as
-         * the case that DF isn't supported at all (such as on macOS).
-         */
-#if defined(IP_MTU_DISCOVER) /* Linux version of IP_DONTFRAG */
-        opt = IP_PMTUDISC_DO;
-        if (setsockopt(sp->socket, IPPROTO_IP, IP_MTU_DISCOVER, &opt, sizeof(opt)) < 0) {
-            i_errno = IESETDONTFRAGMENT;
-            return -1;
-        }
-#else
-#if defined(IP_DONTFRAG) /* UNIX does IP_DONTFRAG */
-        opt = 1;
-        if (setsockopt(sp->socket, IPPROTO_IP, IP_DONTFRAG, &opt, sizeof(opt)) < 0) {
-            i_errno = IESETDONTFRAGMENT;
-            return -1;
-        }
-#else
-#if defined(IP_DONTFRAGMENT) /* Windows does IP_DONTFRAGMENT */
-        opt = 1;
-        if (setsockopt(sp->socket, IPPROTO_IP, IP_DONTFRAGMENT, &opt, sizeof(opt)) < 0) {
-            i_errno = IESETDONTFRAGMENT;
-            return -1;
-        }
-#else
-	i_errno = IESETDONTFRAGMENT;
-	return -1;
-#endif /* IP_DONTFRAGMENT */
-#endif /* IP_DONTFRAG */
-#endif /* IP_MTU_DISCOVER */
-    }
-#endif /* HAVE_DONT_FRAGMENT */
-
     return 0;
 }
 
@@ -4059,11 +4019,6 @@ iperf_add_stream(struct iperf_test *test, struct iperf_stream *sp)
         SLIST_INSERT_HEAD(&test->streams, sp, streams);
         sp->id = 1;
     } else {
-        // for (n = test->streams, i = 2; n->next; n = n->next, ++i);
-        // NOTE: this would ideally be set to 1, however this will not
-        //       be changed since it is not causing a significant problem
-        //       and changing it would break multi-stream tests between old
-        //       and new iperf3 versions.
         i = 2;
         SLIST_FOREACH(n, &test->streams, streams) {
             prev = n;

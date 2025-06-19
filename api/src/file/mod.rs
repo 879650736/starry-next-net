@@ -32,7 +32,11 @@ pub struct Kstat {
     blocks: u64,
     blksize: u32,
 }
-
+impl Kstat {
+    pub fn get_mode(&self) -> u32 {
+        self.mode
+    }
+}
 impl Default for Kstat {
     fn default() -> Self {
         Self {

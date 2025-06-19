@@ -129,12 +129,12 @@ tmr_create(
     getnow( nowP, &now );
 
     if ( free_timers != NULL ) {
-	t = free_timers;
-	free_timers = t->next;
+        t = free_timers;
+        free_timers = t->next;
     } else {
-	t = (Timer*) malloc( sizeof(Timer) );
-	if ( t == NULL )
-	    return NULL;
+        t = (Timer*) malloc( sizeof(Timer) );
+        if ( t == NULL )
+            return NULL;
     }
 
     t->timer_proc = timer_proc;

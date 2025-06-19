@@ -433,6 +433,7 @@ Nsendfile(int fromfd, int tofd, const char *buf, size_t count)
 int
 setnonblocking(int fd, int nonblocking)
 {
+    //fix
     int flags, newflags;
 
     flags = fcntl(fd, F_GETFL, 0);
@@ -441,14 +442,14 @@ setnonblocking(int fd, int nonblocking)
         return -1;
     }
     if (nonblocking)
-	newflags = flags | (int) O_NONBLOCK;
+	    newflags = flags | (int) O_NONBLOCK;
     else
-	newflags = flags & ~((int) O_NONBLOCK);
+	    newflags = flags & ~((int) O_NONBLOCK);
     if (newflags != flags)
-	if (fcntl(fd, F_SETFL, newflags) < 0) {
-	    perror("fcntl(F_SETFL)");
-	    return -1;
-	}
+        if (fcntl(fd, F_SETFL, newflags) < 0) {
+            perror("fcntl(F_SETFL)");
+            return -1;
+        }
     return 0;
 }
 

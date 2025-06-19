@@ -219,6 +219,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
             tf.arg4().into(),
         ),
         Sysno::getsockname => sys_getsockname(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
+        Sysno::getpeername => sys_getpeername(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
         // Sysno::select => sys_select(
         //     tf.arg0() as _,

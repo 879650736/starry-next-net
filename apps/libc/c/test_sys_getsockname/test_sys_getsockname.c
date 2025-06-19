@@ -61,51 +61,9 @@ int main() {
     printf("Socket 本地地址: %s:%d\n", 
            inet_ntoa(local_addr.sin_addr), 
            ntohs(local_addr.sin_port));
-           
-    // // 测试 UDP socket (UDP 无需连接就能获取本地地址)
-    // int udp_sockfd;
-    // struct sockaddr_in udp_addr;
-    // socklen_t udp_len = sizeof(struct sockaddr_in);
-    
-    // printf("\n创建 UDP socket...\n");
-    // if ((udp_sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-    //     perror("UDP socket 创建失败");
-    //     close(sockfd);
-    //     exit(EXIT_FAILURE);
-    // }
-    
-    // // 初始化 UDP 地址结构
-    // memset(&udp_addr, 0, sizeof(udp_addr));
-    // udp_addr.sin_family = AF_INET;
-    // udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    // udp_addr.sin_port = htons(0);  // 自动分配端口
-    
-    // // 绑定 UDP socket
-    // printf("绑定 UDP socket...\n");
-    // if (bind(udp_sockfd, (struct sockaddr*)&udp_addr, sizeof(udp_addr)) < 0) {
-    //     perror("UDP bind 失败");
-    //     close(sockfd);
-    //     close(udp_sockfd);
-    //     exit(EXIT_FAILURE);
-    // }
-    
-    // // 获取 UDP socket 的本地地址
-    // printf("对 UDP socket 调用 getsockname...\n");
-    // if (getsockname(udp_sockfd, (struct sockaddr*)&udp_addr, &udp_len) < 0) {
-    //     perror("UDP getsockname 失败");
-    //     close(sockfd);
-    //     close(udp_sockfd);
-    //     exit(EXIT_FAILURE);
-    // }
-    
-    // // 打印 UDP 地址信息
-    // printf("UDP Socket 绑定到地址: %s:%d\n", 
-    //        inet_ntoa(udp_addr.sin_addr), 
-    //        ntohs(udp_addr.sin_port));
-    
+
     // 关闭 socket
     close(sockfd);
-    //close(udp_sockfd);
     
     printf("测试完成！\n");
     return 0;

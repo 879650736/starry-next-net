@@ -18,6 +18,22 @@ if [[ "$1" == *"riscv"* ]]; then
         --disable-have-tcp-snd-wnd \
         --prefix=$1 --host=riscv64-linux-gnu CC=riscv64-linux-gnu-gcc  --enable-static-bin
     fi
+elif [[ "$1" == *"x86"* ]]; then
+    if [[ "$1" == *"musl"* ]]; then
+        ./configure  --disable-openssl --disable-cpu-affinity  --disable-daemon \
+        --disable-have-dont-fragment  --disable-have-flowlabel  --disable-sendfile \
+        --disable-have-so-bindtodevice --disable-have-so-max-pacing-rate \
+        --disable-have-tcp-congestion --disable-have-tcp-user-timeout \
+        --disable-have-tcp-snd-wnd \
+        --prefix=$1 --host=x86_64-linux-musl CC=x86_64-linux-musl-gcc  --enable-static-bin
+    else
+        ./configure  --disable-openssl --disable-cpu-affinity  --disable-daemon \
+        --disable-have-dont-fragment  --disable-have-flowlabel  --disable-sendfile \
+        --disable-have-so-bindtodevice --disable-have-so-max-pacing-rate \
+        --disable-have-tcp-congestion --disable-have-tcp-user-timeout \
+        --disable-have-tcp-snd-wnd \
+        --prefix=$1 --host=x86_64-linux-gnu CC=x86_64-linux-gnu-gcc  --enable-static-bin
+    fi
 else
     if [[ "$1" == *"musl"* ]]; then
         ./configure  --disable-openssl --disable-cpu-affinity  --disable-daemon \

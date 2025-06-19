@@ -7,8 +7,7 @@ use alloc::string::ToString;
 use axerrno::{AxError, LinuxError, LinuxResult};
 use axfs::fops::OpenOptions;
 use linux_raw_sys::general::{
-    __kernel_mode_t, AT_FDCWD, F_DUPFD, F_DUPFD_CLOEXEC, F_SETFL, O_APPEND, O_CREAT, O_DIRECTORY,
-    O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY,
+    __kernel_mode_t, AT_FDCWD, F_DUPFD, F_GETFL, O_RDWR, F_DUPFD_CLOEXEC, F_GETFD, F_SETFL, O_APPEND, O_CREAT, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDONLY, O_TRUNC, O_WRONLY
 };
 
 use crate::{
@@ -159,6 +158,54 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             }
             get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
             Ok(0)
+        }
+        F_GETFL => {
+            if fd == 0 {
+                // stdin 通常是只读的
+                return Ok(O_RDONLY as _);
+            } else if fd == 1 || fd == 2 {
+                // stdout/stderr 通常是只写的
+                return Ok(O_WRONLY as _);
+            }
+            let file = get_file_like(fd)?;
+            let mut ret = 0;
+
+            
+            // 获取文件状态信息
+            let kstat = file.stat()?;
+            let mode = kstat.get_mode();
+            
+            // 从文件的权限位判断读写权限
+            // 注意：这里需要根据实际的文件打开方式来判断，而不是文件本身的权限
+            // 但由于当前架构限制，我们可以通过尝试读写操作来判断
+            
+            // 检查是否可读
+            let mut test_buf = [0u8; 0];
+            let can_read = file.read(&mut test_buf).is_ok();
+            
+            // 检查是否可写  
+            let can_write = file.write(&[]).is_ok();
+            info!(
+                "fcntl: fd: {}, can_read: {}, can_write: {}, mode: {:o}",
+                fd, can_read, can_write, mode
+            );
+            // 设置读写标志
+            match (can_read, can_write) {
+                (true, false) => ret |= O_RDONLY,
+                (false, true) => ret |= O_WRONLY,
+                (true, true) => ret |= O_RDWR, // 等同于 O_RDWR
+                (false, false) => {} // 这种情况不应该发生
+            }
+            // 检查是否为非阻塞模式
+            // 首先尝试转换为 Socket 类型
+            if let Ok(socket) = file.into_any().downcast::<crate::file::Socket>() {
+                ret |= O_RDWR;
+                if socket.is_nonblocking() {
+                    ret |= O_NONBLOCK;
+                }
+            }
+
+            Ok(ret as _)
         }
         _ => {
             warn!("unsupported fcntl parameters: cmd: {}", cmd);
