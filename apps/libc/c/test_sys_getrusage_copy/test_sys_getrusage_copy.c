@@ -51,9 +51,9 @@ int main() {
     print_rusage(&usage_start);
     
     // 执行一些工作
-    do_some_sleep(2);
+    //do_some_sleep(3);
     //do_some_work(50000000);
-    //clock();// 将clock映射为计算密集型任务，测试内核内部的时间
+    //clock();// 将clock映射为sleep(2),测试内核内部sleep
     
     
     // 获取结束时的资源使用情况
