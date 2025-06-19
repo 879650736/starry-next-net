@@ -5,5 +5,6 @@ mod signal;
 mod sys;
 mod task;
 mod time;
+mod rusage;
 
-pub use self::{fs::*, futex::*, mm::*, signal::*, sys::*, task::*, time::*};
+pub use self::{fs::*, futex::*, mm::*, rusage::*, signal::*, sys::*, task::*, time::*};

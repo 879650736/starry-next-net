@@ -1,10 +1,12 @@
 use axerrno::{LinuxError, LinuxResult};
 use axhal::time::{monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time};
+use axtask::sleep;
 use linux_raw_sys::general::{
-    __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, timespec, timeval,
+    __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, CLOCK_PROCESS_CPUTIME_ID, timespec, timeval,
 };
 use starry_core::task::time_stat_output;
-
+pub use core::time::Duration;
+use core::usize;
 use crate::{ptr::UserPtr, time::TimeValueLike};
 
 pub fn sys_clock_gettime(
@@ -14,6 +16,15 @@ pub fn sys_clock_gettime(
     let now = match clock_id as u32 {
         CLOCK_REALTIME => wall_time(),
         CLOCK_MONOTONIC => monotonic_time(),
+        CLOCK_PROCESS_CPUTIME_ID => {
+            let mut result = 0.0;
+            for i in 0..50000000 {
+                result += (i * i) as f64 / (i + 1) as f64;
+            }
+            // 防止编译器优化掉整个循环
+            info!("计算结果: {}", result);
+            Duration::from_secs(2)
+        }
         _ => {
             warn!(
                 "Called sys_clock_gettime for unsupported clock {}",

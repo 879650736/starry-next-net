@@ -200,6 +200,7 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::gettimeofday => sys_gettimeofday(tf.arg0().into()),
         Sysno::times => sys_times(tf.arg0().into()),
         Sysno::clock_gettime => sys_clock_gettime(tf.arg0() as _, tf.arg1().into()),
+        Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
 
         _ => {
             warn!("Unimplemented syscall: {}", sysno);
