@@ -221,18 +221,48 @@ fn handle_syscall(tf: &mut TrapFrame, syscall_num: usize) -> isize {
         Sysno::getsockname => sys_getsockname(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::getpeername => sys_getpeername(tf.arg0() as _, tf.arg1().into(), tf.arg2().into()),
         Sysno::getrusage => sys_getrusage(tf.arg0() as _, tf.arg1().into()),
-        // Sysno::select => sys_select(
-        //     tf.arg0() as _,
-        //     tf.arg1().into(),
-        //     tf.arg2().into(),
-        //     tf.arg3().into(),
-        //     tf.arg4().into()
-        // ),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::select => sys_select(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2().into(),
+            tf.arg3().into(),
+            tf.arg4().into()
+        ),
         Sysno::pselect6 => sys_pselect6(
             tf.arg0() as _,
             tf.arg1().into(),
             tf.arg2().into(),
             tf.arg3().into(),
+            tf.arg4().into(),
+            tf.arg5().into(),
+        ),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::poll => sys_poll(
+            tf.arg0().into(),
+            tf.arg1() as _,
+            tf.arg2() as _,
+        ),
+        Sysno::ppoll => sys_ppoll(
+            tf.arg0().into(),
+            tf.arg1() as _,
+            tf.arg2().into(),
+            tf.arg3().into(),
+            tf.arg4() as _,
+        ),
+        Sysno::sendto => sys_sendto(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2() as _,
+            tf.arg3() as _,
+            tf.arg4().into(),
+            tf.arg5() as _,
+        ),
+        Sysno::recvfrom => sys_recvfrom(
+            tf.arg0() as _,
+            tf.arg1().into(),
+            tf.arg2() as _,
+            tf.arg3() as _,
             tf.arg4().into(),
             tf.arg5().into(),
         ),
