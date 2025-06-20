@@ -179,6 +179,15 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
             // 注意：这里需要根据实际的文件打开方式来判断，而不是文件本身的权限
             // 但由于当前架构限制，我们可以通过尝试读写操作来判断
             
+            // 检查是否为非阻塞模式
+            // 首先尝试转换为 Socket 类型
+            if let Ok(socket) = file.clone().into_any().downcast::<crate::file::Socket>() {
+                ret |= O_RDWR;
+                if socket.is_nonblocking() {
+                    ret |= O_NONBLOCK;
+                }
+                return Ok(ret as _);
+            }
             // 检查是否可读
             let mut test_buf = [0u8; 0];
             let can_read = file.read(&mut test_buf).is_ok();
@@ -196,14 +205,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> LinuxResult<isize> {
                 (true, true) => ret |= O_RDWR, // 等同于 O_RDWR
                 (false, false) => {} // 这种情况不应该发生
             }
-            // 检查是否为非阻塞模式
-            // 首先尝试转换为 Socket 类型
-            if let Ok(socket) = file.into_any().downcast::<crate::file::Socket>() {
-                ret |= O_RDWR;
-                if socket.is_nonblocking() {
-                    ret |= O_NONBLOCK;
-                }
-            }
+            
 
             Ok(ret as _)
         }

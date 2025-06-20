@@ -109,6 +109,7 @@ impl FileLike for Socket {
     }
 
     fn set_nonblocking(&self, nonblock: bool) -> LinuxResult {
+        info!("set_nonblocking: nonblock: {}", nonblock);
         match self {
             Socket::Udp(udpsocket) => udpsocket.lock().set_nonblocking(nonblock),
             Socket::Tcp(tcpsocket) => tcpsocket.lock().set_nonblocking(nonblock),

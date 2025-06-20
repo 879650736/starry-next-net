@@ -308,17 +308,22 @@ iperf_handle_message_client(struct iperf_test *test)
             printf("TEST_RUNNING\n");
             break;
         case EXCHANGE_RESULTS:
+            printf("EXCHANGE_RESULTS\n");
             if (iperf_exchange_results(test) < 0)
                 return -1;
             break;
         case DISPLAY_RESULTS:
+            printf("DISPLAY_RESULTS\n");
+            printf("test->on_test_finish: %p\n", test->on_test_finish);
             if (test->on_test_finish)
                 test->on_test_finish(test);
             iperf_client_end(test);
             break;
         case IPERF_DONE:
+            printf("IPERF_DONE\n");
             break;
         case SERVER_TERMINATE:
+            printf("SERVER_TERMINATE\n");
             i_errno = IESERVERTERM;
             /*
             * Temporarily be in DISPLAY_RESULTS phase so we can get
@@ -331,14 +336,16 @@ iperf_handle_message_client(struct iperf_test *test)
             test->state = oldstate;
             return -1;
         case ACCESS_DENIED:
+            printf("ACCESS_DENIED\n");
             i_errno = IEACCESSDENIED;
             return -1;
         case SERVER_ERROR:
+            printf("SERVER_ERROR\n");
             if (Nread(test->ctrl_sck, (char*) &err, sizeof(err), Ptcp) < 0) {
                 i_errno = IECTRLREAD;
                 return -1;
             }
-	    i_errno = ntohl(err);
+	        i_errno = ntohl(err);
             if (Nread(test->ctrl_sck, (char*) &err, sizeof(err), Ptcp) < 0) {
                 i_errno = IECTRLREAD;
                 return -1;
@@ -538,7 +545,7 @@ iperf_run_client(struct iperf_test * test)
     while (test->state != IPERF_DONE) {
         
         i++;
-        assert(i<8);
+        //assert(i<10);
         printf("\x1b[31m" "iperf_run_client: i = %d\n" "\x1b[0m", i);
         memcpy(&read_set, &test->read_set, sizeof(fd_set));
         memcpy(&write_set, &test->write_set, sizeof(fd_set));
@@ -609,7 +616,6 @@ iperf_run_client(struct iperf_test * test)
                 // Set non-blocking for non-UDP tests
                 if (test->protocol->id != Pudp) {
                     SLIST_FOREACH(sp, &test->streams, streams) {
-                        //fix
                         setnonblocking(sp->socket, 1);
                     }
                 }
@@ -660,11 +666,12 @@ iperf_run_client(struct iperf_test * test)
                 (test->settings->blocks != 0 
                 && (test->blocks_sent >= test->settings->blocks ||
                 test->blocks_received >= test->settings->blocks)))) {
-
+                
+                printf("Test is done\n");
                 // Unset non-blocking for non-UDP tests
                 if (test->protocol->id != Pudp) {
                     SLIST_FOREACH(sp, &test->streams, streams) {
-                    setnonblocking(sp->socket, 0);
+                        setnonblocking(sp->socket, 0);
                     }
                 }
 
@@ -686,14 +693,14 @@ iperf_run_client(struct iperf_test * test)
             goto cleanup_and_fail;
         }
     }
-
-    // if (test->json_output) {
-    //     if (iperf_json_finish(test) < 0)
-    //         return -1;
-    // } else {
-    //     iperf_printf(test, "\n");
-    //     iperf_printf(test, "%s", report_done);
-    // }
+    
+    if (test->json_output) {
+        if (iperf_json_finish(test) < 0)
+            return -1;
+    } else {
+        iperf_printf(test, "\n");
+        iperf_printf(test, "%s", report_done);
+    }
 
     iflush(test);
 
