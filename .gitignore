@@ -11,4 +11,6 @@ apps/*/build/
 !/vendor/**/Cargo.lock
 /.axconfig.*
 *.img
-/apps/iperf*
+/apps/iperf/
+/apps/iperf*/
+
